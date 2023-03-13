@@ -36,6 +36,13 @@ import math
 
 import rospy
 
+# Diagnostics Requirements
+import roslib
+roslib.load_manifest('diagnostic_updater')
+import diagnostic_updater
+import diagnostic_msgs
+import std_msgs
+
 from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference, Imu
 from geometry_msgs.msg import TwistStamped, QuaternionStamped
 from tf.transformations import quaternion_from_euler
@@ -183,6 +190,7 @@ class RosNMEADriver(object):
         current_fix = NavSatFix()
         current_fix.header.stamp = current_time
         current_fix.header.frame_id = frame_id
+
         if not self.use_GNSS_time:
             current_time_ref = TimeReference()
             current_time_ref.header.stamp = current_time
@@ -242,9 +250,7 @@ class RosNMEADriver(object):
             hdop = data['hdop']
             current_fix.position_covariance[0] = (hdop * self.lon_std_dev) ** 2
             current_fix.position_covariance[4] = (hdop * self.lat_std_dev) ** 2
-            current_fix.position_covariance[8] = (
-                2 * hdop * self.alt_std_dev) ** 2  # FIXME
-
+            current_fix.position_covariance[8] = (hdop * self.alt_std_dev) ** 2  # FIXME
             self.fix_pub.publish(current_fix)
 
             if not (math.isnan(data['utc_time'][0]) or self.use_GNSS_time):
@@ -262,8 +268,8 @@ class RosNMEADriver(object):
                 current_vel = TwistStamped()
                 current_vel.header.stamp = current_time
                 current_vel.header.frame_id = frame_id
-                current_vel.twist.linear.x = data['speed'] * math.sin(data['true_course'])
-                current_vel.twist.linear.y = data['speed'] * math.cos(data['true_course'])
+                current_vel.twist.linear.x = data['speed'] # * math.sin(data['true_course'])
+                current_vel.twist.linear.y = 0.0 # data['speed'] * math.cos(data['true_course'])
                 self.vel_pub.publish(current_vel)
 
         elif 'RMC' in parsed_sentence:
@@ -311,10 +317,8 @@ class RosNMEADriver(object):
                 current_vel = TwistStamped()
                 current_vel.header.stamp = current_time
                 current_vel.header.frame_id = frame_id
-                current_vel.twist.linear.x = data['speed'] * \
-                    math.sin(data['true_course'])
-                current_vel.twist.linear.y = data['speed'] * \
-                    math.cos(data['true_course'])
+                current_vel.twist.linear.x = data['speed'] # * math.sin(data['true_course'])
+                current_vel.twist.linear.y = 0.0 # data['speed'] * math.cos(data['true_course'])
                 self.vel_pub.publish(current_vel)
         elif 'GST' in parsed_sentence:
             data = parsed_sentence['GST']
@@ -327,26 +331,25 @@ class RosNMEADriver(object):
         elif 'HDT' in parsed_sentence:
             data = parsed_sentence['HDT']
             if data['heading']:
-                current_heading = QuaternionStamped()
-                current_heading.header.stamp = current_time
-                current_heading.header.frame_id = frame_id
-                q = quaternion_from_euler(0, 0, math.radians(data['heading']))
-                current_heading.quaternion.x = q[0]
-                current_heading.quaternion.y = q[1]
-                current_heading.quaternion.z = q[2]
-                current_heading.quaternion.w = q[3]
-                self.heading_pub.publish(current_heading)
-                
-                current_nav_heading = Imu()
-                current_nav_heading.header.stamp = current_time
-                current_nav_heading.frame_id = frame_id
-                current_nav_heading.quaternion.x = q[0]
-                current_nav_heading.quaternion.y = q[1]
-                current_nav_heading.quaternion.z = q[2]
-                current_nav_heading.quaternion.w = q[3]
-                self.nav_heading_pub.publish(current_nav_heading)
-
-
+              current_heading = QuaternionStamped()
+              current_heading.header.stamp = current_time
+              current_heading.header.frame_id = frame_id
+              q = quaternion_from_euler(0, 0, -(math.radians(data['heading'])))
+              current_heading.quaternion.x = q[0]
+              current_heading.quaternion.y = q[1]
+              current_heading.quaternion.z = q[2]
+              current_heading.quaternion.w = q[3]
+              self.heading_pub.publish(current_heading)
+              
+              current_nav_heading = Imu()
+              current_nav_heading.header.stamp = current_time
+              current_nav_heading.header.frame_id = frame_id
+              current_nav_heading.orientation.x = q[0]
+              current_nav_heading.orientation.y = q[1]
+              current_nav_heading.orientation.z = q[2]
+              current_nav_heading.orientation.w = q[3]
+              current_nav_heading.orientation_covariance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0000068539]
+              self.nav_heading_pub.publish(current_nav_heading)
         else:
             return False
 
