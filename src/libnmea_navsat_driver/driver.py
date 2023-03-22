@@ -215,8 +215,8 @@ class RosNMEADriver(object):
             fix_type = data['fix_type']
                 # if not (fix_type in self.gps_qualities):
                 #     fix_type = -1
-            rospy.loginfo(fix_type)
-            if fix_type=='fix_valid': #only use rtk fixed data
+            # rospy.loginfo(fix_type)
+            if fix_type==4: #only use rtk fixed data
                 gps_qual = self.gps_qualities[fix_type]
                 default_epe = gps_qual[0]
                 current_fix.status.status = gps_qual[1]
