@@ -213,45 +213,46 @@ class RosNMEADriver(object):
                 current_fix.header.stamp = rospy.Time(data['utc_time'][0], data['utc_time'][1])
 
             fix_type = data['fix_type']
-            if not (fix_type in self.gps_qualities):
-                fix_type = -1
-            gps_qual = self.gps_qualities[fix_type]
-            default_epe = gps_qual[0]
-            current_fix.status.status = gps_qual[1]
-            current_fix.position_covariance_type = gps_qual[2]
+                # if not (fix_type in self.gps_qualities):
+                #     fix_type = -1
+            if fix_type==4: #only use rtk fixed data
+                gps_qual = self.gps_qualities[fix_type]
+                default_epe = gps_qual[0]
+                current_fix.status.status = gps_qual[1]
+                current_fix.position_covariance_type = gps_qual[2]
 
-            self.valid_fix = (fix_type > 0)
+                self.valid_fix = (fix_type > 0)
 
-            current_fix.status.service = NavSatStatus.SERVICE_GPS
+                current_fix.status.service = NavSatStatus.SERVICE_GPS
 
-            latitude = data['latitude']
-            if data['latitude_direction'] == 'S':
-                latitude = -latitude
-            current_fix.latitude = latitude
+                latitude = data['latitude']
+                if data['latitude_direction'] == 'S':
+                    latitude = -latitude
+                current_fix.latitude = latitude
 
-            longitude = data['longitude']
-            if data['longitude_direction'] == 'W':
-                longitude = -longitude
-            current_fix.longitude = longitude
+                longitude = data['longitude']
+                if data['longitude_direction'] == 'W':
+                    longitude = -longitude
+                current_fix.longitude = longitude
 
-            # Altitude is above ellipsoid, so adjust for mean-sea-level
-            altitude = data['altitude'] + data['mean_sea_level']
-            current_fix.altitude = altitude
+                # Altitude is above ellipsoid, so adjust for mean-sea-level
+                altitude = data['altitude'] + data['mean_sea_level']
+                current_fix.altitude = altitude
 
-            # use default epe std_dev unless we've received a GST sentence with
-            # epes
-            if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
-                self.lon_std_dev = default_epe
-            if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
-                self.lat_std_dev = default_epe
-            if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
-                self.alt_std_dev = default_epe * 2
+                # use default epe std_dev unless we've received a GST sentence with
+                # epes
+                if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
+                    self.lon_std_dev = default_epe
+                if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
+                    self.lat_std_dev = default_epe
+                if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
+                    self.alt_std_dev = default_epe * 2
 
-            hdop = data['hdop']
-            current_fix.position_covariance[0] = (hdop * self.lon_std_dev) ** 2
-            current_fix.position_covariance[4] = (hdop * self.lat_std_dev) ** 2
-            current_fix.position_covariance[8] = (hdop * self.alt_std_dev) ** 2  # FIXME
-            self.fix_pub.publish(current_fix)
+                hdop = data['hdop']
+                current_fix.position_covariance[0] = (hdop * self.lon_std_dev) ** 2
+                current_fix.position_covariance[4] = (hdop * self.lat_std_dev) ** 2
+                current_fix.position_covariance[8] = (hdop * self.alt_std_dev) ** 2  # FIXME
+                self.fix_pub.publish(current_fix)
 
             if not (math.isnan(data['utc_time'][0]) or self.use_GNSS_time):
                 current_time_ref.time_ref = rospy.Time(
