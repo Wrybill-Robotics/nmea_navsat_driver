@@ -88,6 +88,8 @@ class RosNMEADriver(object):
             'heading', QuaternionStamped, queue_size=1)
         self.nav_heading_pub = rospy.Publisher(
             'nav_heading', Imu, queue_size=1)
+        self.status_pub = rospy.Publisher('status', NavSatStatus, queue_size=1)
+
         self.use_GNSS_time = rospy.get_param('~use_GNSS_time', False)
         if not self.use_GNSS_time:
             self.time_ref_pub = rospy.Publisher(
@@ -217,16 +219,30 @@ class RosNMEADriver(object):
             if not (fix_type in self.gps_qualities):
                 fix_type = -1
 
+            #publish navsat_status seperately
+            current_status = NavSatStatus()    
+            gps_qual = self.gps_qualities[fix_type]
+            default_epe = gps_qual[0]
+            current_fix.status.status = gps_qual[1]
+            current_fix.position_covariance_type = gps_qual[2]
+
+            self.valid_fix = (fix_type > 0)
+
+            current_fix.status.service = NavSatStatus.SERVICE_GPS
+
+            current_status.status = gps_qual[1]
+            current_status.status=NavSatStatus.SERVICE_GPS
+            self.status_pub.publish(current_status)
             if self.rtk_only and fix_type==4 or not self.rtk_only: #if rtk only = true, check message is rtk. OR if rtk only=false
 
-                gps_qual = self.gps_qualities[fix_type]
-                default_epe = gps_qual[0]
-                current_fix.status.status = gps_qual[1]
-                current_fix.position_covariance_type = gps_qual[2]
+                # gps_qual = self.gps_qualities[fix_type]
+                # default_epe = gps_qual[0]
+                # current_fix.status.status = gps_qual[1]
+                # current_fix.position_covariance_type = gps_qual[2]
 
-                self.valid_fix = (fix_type > 0)
+                # self.valid_fix = (fix_type > 0)
 
-                current_fix.status.service = NavSatStatus.SERVICE_GPS
+                # current_fix.status.service = NavSatStatus.SERVICE_GPS
 
                 latitude = data['latitude']
                 if data['latitude_direction'] == 'S':
