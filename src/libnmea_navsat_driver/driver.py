@@ -95,6 +95,7 @@ class RosNMEADriver(object):
 
         self.time_ref_source = rospy.get_param('~time_ref_source', None)
         self.use_RMC = rospy.get_param('~useRMC', False)
+        self.rtk_only = rospy.get_param('~rtk_only',False)
         self.valid_fix = False
 
         # epe = estimated position error
@@ -215,7 +216,7 @@ class RosNMEADriver(object):
             fix_type = data['fix_type']
                 # if not (fix_type in self.gps_qualities):
                 #     fix_type = -1
-            if fix_type==4: #only use rtk fixed data
+            if self.rtk_only and fix_type==4 or not self.rtk_only: #if rtk only = true, check message is rtk. OR if rtk only=false
                 gps_qual = self.gps_qualities[fix_type]
                 default_epe = gps_qual[0]
                 current_fix.status.status = gps_qual[1]
