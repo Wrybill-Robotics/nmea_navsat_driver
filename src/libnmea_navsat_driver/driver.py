@@ -214,9 +214,11 @@ class RosNMEADriver(object):
                 current_fix.header.stamp = rospy.Time(data['utc_time'][0], data['utc_time'][1])
 
             fix_type = data['fix_type']
-                # if not (fix_type in self.gps_qualities):
-                #     fix_type = -1
+            if not (fix_type in self.gps_qualities):
+                fix_type = -1
+
             if self.rtk_only and fix_type==4 or not self.rtk_only: #if rtk only = true, check message is rtk. OR if rtk only=false
+
                 gps_qual = self.gps_qualities[fix_type]
                 default_epe = gps_qual[0]
                 current_fix.status.status = gps_qual[1]
