@@ -2,7 +2,7 @@
 
   <!-- A simple launch file for the nmea_serial_driver node. -->
 
-  <arg name="port" default="/dev/pts/2" />
+  <arg name="port" default="/dev/ttyACM1" />
   <arg name="baud" default="9600" />
   <arg name="frame_id" default="gps" />
   <arg name="use_GNSS_time" default="False" />
