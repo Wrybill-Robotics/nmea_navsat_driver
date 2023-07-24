@@ -36,7 +36,14 @@ import math
 
 import rospy
 
-from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
+# Diagnostics Requirements
+import roslib
+roslib.load_manifest('diagnostic_updater')
+import diagnostic_updater
+import diagnostic_msgs
+import std_msgs
+
+from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference, Imu
 from geometry_msgs.msg import TwistStamped, QuaternionStamped
 from tf.transformations import quaternion_from_euler
 
@@ -54,6 +61,7 @@ class RosNMEADriver(object):
             - NavSatFix publisher on the 'fix' channel.
             - TwistStamped publisher on the 'vel' channel.
             - QuaternionStamped publisher on the 'heading' channel.
+            - Imu publisher on the 'nav_heading' channel.
             - TimeReference publisher on the 'time_reference' channel.
 
         :ROS Parameters:
@@ -78,6 +86,10 @@ class RosNMEADriver(object):
         self.vel_pub = rospy.Publisher('vel', TwistStamped, queue_size=1)
         self.heading_pub = rospy.Publisher(
             'heading', QuaternionStamped, queue_size=1)
+        self.nav_heading_pub = rospy.Publisher(
+            'nav_heading', Imu, queue_size=1)
+        self.status_pub = rospy.Publisher('status', NavSatStatus, queue_size=1)
+
         self.use_GNSS_time = rospy.get_param('~use_GNSS_time', False)
         if not self.use_GNSS_time:
             self.time_ref_pub = rospy.Publisher(
@@ -85,6 +97,7 @@ class RosNMEADriver(object):
 
         self.time_ref_source = rospy.get_param('~time_ref_source', None)
         self.use_RMC = rospy.get_param('~useRMC', False)
+        self.rtk_only = rospy.get_param('~rtk_only',False)
         self.valid_fix = False
 
         # epe = estimated position error
@@ -180,6 +193,7 @@ class RosNMEADriver(object):
         current_fix = NavSatFix()
         current_fix.header.stamp = current_time
         current_fix.header.frame_id = frame_id
+
         if not self.use_GNSS_time:
             current_time_ref = TimeReference()
             current_time_ref.header.stamp = current_time
@@ -204,6 +218,9 @@ class RosNMEADriver(object):
             fix_type = data['fix_type']
             if not (fix_type in self.gps_qualities):
                 fix_type = -1
+
+            #publish navsat_status seperately
+            current_status = NavSatStatus()    
             gps_qual = self.gps_qualities[fix_type]
             default_epe = gps_qual[0]
             current_fix.status.status = gps_qual[1]
@@ -213,36 +230,48 @@ class RosNMEADriver(object):
 
             current_fix.status.service = NavSatStatus.SERVICE_GPS
 
-            latitude = data['latitude']
-            if data['latitude_direction'] == 'S':
-                latitude = -latitude
-            current_fix.latitude = latitude
+            current_status.status = gps_qual[1]
+            current_status.status=NavSatStatus.SERVICE_GPS
+            self.status_pub.publish(current_status)
+            if self.rtk_only and fix_type==4 or not self.rtk_only: #if rtk only = true, check message is rtk. OR if rtk only=false
 
-            longitude = data['longitude']
-            if data['longitude_direction'] == 'W':
-                longitude = -longitude
-            current_fix.longitude = longitude
+                # gps_qual = self.gps_qualities[fix_type]
+                # default_epe = gps_qual[0]
+                # current_fix.status.status = gps_qual[1]
+                # current_fix.position_covariance_type = gps_qual[2]
 
-            # Altitude is above ellipsoid, so adjust for mean-sea-level
-            altitude = data['altitude'] + data['mean_sea_level']
-            current_fix.altitude = altitude
+                # self.valid_fix = (fix_type > 0)
 
-            # use default epe std_dev unless we've received a GST sentence with
-            # epes
-            if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
-                self.lon_std_dev = default_epe
-            if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
-                self.lat_std_dev = default_epe
-            if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
-                self.alt_std_dev = default_epe * 2
+                # current_fix.status.service = NavSatStatus.SERVICE_GPS
 
-            hdop = data['hdop']
-            current_fix.position_covariance[0] = (hdop * self.lon_std_dev) ** 2
-            current_fix.position_covariance[4] = (hdop * self.lat_std_dev) ** 2
-            current_fix.position_covariance[8] = (
-                2 * hdop * self.alt_std_dev) ** 2  # FIXME
+                latitude = data['latitude']
+                if data['latitude_direction'] == 'S':
+                    latitude = -latitude
+                current_fix.latitude = latitude
 
-            self.fix_pub.publish(current_fix)
+                longitude = data['longitude']
+                if data['longitude_direction'] == 'W':
+                    longitude = -longitude
+                current_fix.longitude = longitude
+
+                # Altitude is above ellipsoid, so adjust for mean-sea-level
+                altitude = data['altitude'] + data['mean_sea_level']
+                current_fix.altitude = altitude
+
+                # use default epe std_dev unless we've received a GST sentence with
+                # epes
+                if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
+                    self.lon_std_dev = default_epe
+                if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
+                    self.lat_std_dev = default_epe
+                if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
+                    self.alt_std_dev = default_epe * 2
+
+                hdop = data['hdop']
+                current_fix.position_covariance[0] = (hdop * self.lon_std_dev) ** 2
+                current_fix.position_covariance[4] = (hdop * self.lat_std_dev) ** 2
+                current_fix.position_covariance[8] = (hdop * self.alt_std_dev) ** 2  # FIXME
+                self.fix_pub.publish(current_fix)
 
             if not (math.isnan(data['utc_time'][0]) or self.use_GNSS_time):
                 current_time_ref.time_ref = rospy.Time(
@@ -259,8 +288,8 @@ class RosNMEADriver(object):
                 current_vel = TwistStamped()
                 current_vel.header.stamp = current_time
                 current_vel.header.frame_id = frame_id
-                current_vel.twist.linear.x = data['speed'] * math.sin(data['true_course'])
-                current_vel.twist.linear.y = data['speed'] * math.cos(data['true_course'])
+                current_vel.twist.linear.x = data['speed'] # * math.sin(data['true_course'])
+                current_vel.twist.linear.y = 0.0 # data['speed'] * math.cos(data['true_course'])
                 self.vel_pub.publish(current_vel)
 
         elif 'RMC' in parsed_sentence:
@@ -308,10 +337,8 @@ class RosNMEADriver(object):
                 current_vel = TwistStamped()
                 current_vel.header.stamp = current_time
                 current_vel.header.frame_id = frame_id
-                current_vel.twist.linear.x = data['speed'] * \
-                    math.sin(data['true_course'])
-                current_vel.twist.linear.y = data['speed'] * \
-                    math.cos(data['true_course'])
+                current_vel.twist.linear.x = data['speed'] # * math.sin(data['true_course'])
+                current_vel.twist.linear.y = 0.0 # data['speed'] * math.cos(data['true_course'])
                 self.vel_pub.publish(current_vel)
         elif 'GST' in parsed_sentence:
             data = parsed_sentence['GST']
@@ -324,15 +351,25 @@ class RosNMEADriver(object):
         elif 'HDT' in parsed_sentence:
             data = parsed_sentence['HDT']
             if data['heading']:
-                current_heading = QuaternionStamped()
-                current_heading.header.stamp = current_time
-                current_heading.header.frame_id = frame_id
-                q = quaternion_from_euler(0, 0, math.radians(data['heading']))
-                current_heading.quaternion.x = q[0]
-                current_heading.quaternion.y = q[1]
-                current_heading.quaternion.z = q[2]
-                current_heading.quaternion.w = q[3]
-                self.heading_pub.publish(current_heading)
+              current_heading = QuaternionStamped()
+              current_heading.header.stamp = current_time
+              current_heading.header.frame_id = frame_id
+              q = quaternion_from_euler(0, 0, -(math.radians(data['heading'])))
+              current_heading.quaternion.x = q[0]
+              current_heading.quaternion.y = q[1]
+              current_heading.quaternion.z = q[2]
+              current_heading.quaternion.w = q[3]
+              self.heading_pub.publish(current_heading)
+              
+              current_nav_heading = Imu()
+              current_nav_heading.header.stamp = current_time
+              current_nav_heading.header.frame_id = frame_id
+              current_nav_heading.orientation.x = q[0]
+              current_nav_heading.orientation.y = q[1]
+              current_nav_heading.orientation.z = q[2]
+              current_nav_heading.orientation.w = q[3]
+              current_nav_heading.orientation_covariance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0000068539]
+              self.nav_heading_pub.publish(current_nav_heading)
         else:
             return False
 
