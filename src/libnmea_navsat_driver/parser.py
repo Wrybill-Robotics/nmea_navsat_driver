@@ -96,6 +96,26 @@ def convert_knots_to_mps(knots):
 def convert_deg_to_rads(degs):
     return math.radians(safe_float(degs))
 
+def convert_heading_to_enu(field):
+    """Convert the incoming data from the device to ENU format.
+    Wrapper is needed because heading data from HDT is in NED format.
+    Ros requires ENU compliance of data
+    Args:
+        field: The field (usually a str) to convert to float.
+    Returns:
+        The float value of VTG in ENU format.
+    """
+    if len(field) != 0:
+        heading_yaw = float(field)
+        # heading_yaw = -heading_yaw
+        if heading_yaw > 180.0:
+            heading_yaw = heading_yaw - 360
+
+        if heading_yaw < -180:
+            heading_yaw = heading_yaw + 360
+
+        return safe_float(heading_yaw)
+
 
 """Format for this dictionary is a sentence identifier (e.g. "GGA") as the key, with a
 list of tuples where each tuple is a field name, conversion function and index
@@ -135,6 +155,7 @@ parse_maps = {
     ],
     "HDT": [
         ("heading", safe_float, 1),
+        # ("heading", convert_heading_to_enu, 1)
     ],
     "VTG": [
         ("true_course", convert_deg_to_rads, 1),
