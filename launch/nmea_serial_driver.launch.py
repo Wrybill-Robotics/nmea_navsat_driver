@@ -28,6 +28,7 @@ def generate_launch_description():
     driver_node = actions.Node(
         package='nmea_navsat_driver',
         executable='nmea_serial_driver',
+        name='nmea',
         output='screen',
         parameters=[config_file])
 
