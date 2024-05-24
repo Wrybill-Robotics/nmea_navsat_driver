@@ -37,6 +37,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
 from geometry_msgs.msg import TwistStamped, QuaternionStamped
+from sensor_msgs.msg import Imu
 from tf_transformations import quaternion_from_euler
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
 from libnmea_navsat_driver import parser
@@ -260,6 +261,19 @@ class Ros2NMEADriver(Node):
         elif 'HDT' in parsed_sentence:
             data = parsed_sentence['HDT']
             if data['heading']:
+                # publishes heading as an Imu message for Navsat_transform
+                # current_heading = Imu()
+                # current_heading.header.stamp = current_time
+                # current_heading.header.frame_id = frame_id
+                # q = quaternion_from_euler(0, 0, math.radians(data['heading']))
+                # current_heading.orientation.x = q[0]
+                # current_heading.orientation.y = q[1]
+                # current_heading.orientation.z = q[2]
+                # current_heading.orientation.w = q[3]
+                # current_heading.orientation_covariance[0] = 0.0
+                # current_heading.orientation_covariance[4] = 0.0
+                # current_heading.orientation_covariance[8] = 0.0000068539
+                # # old
                 current_heading = QuaternionStamped()
                 current_heading.header.stamp = current_time
                 current_heading.header.frame_id = frame_id
