@@ -164,6 +164,8 @@ class Ros2NMEADriver(Node):
                 self.valid_fix = False
 
             # if fix_type==4:
+            self.status_type = fix_type
+            # self.get_logger().info(f"{self.status_type}")
             current_fix.status.service = NavSatStatus.SERVICE_GPS
             latitude = data['latitude']
             if data['latitude_direction'] == 'S':
@@ -188,11 +190,13 @@ class Ros2NMEADriver(Node):
                 self.alt_std_dev = default_epe * 2
 
             hdop = data['hdop']
-            current_fix.position_covariance[0] = 0.001#(hdop/100 * self.lon_std_dev) ** 2
-            current_fix.position_covariance[4] = 0.001#(hdop/100 * self.lat_std_dev) ** 2
-            current_fix.position_covariance[8] = 0.001#(hdop/100 * self.alt_std_dev) ** 2  # FIXME
+            current_fix.position_covariance[0] = 0.1#(hdop/100 * self.lon_std_dev) ** 2
+            current_fix.position_covariance[4] = 0.1#(hdop/100 * self.lat_std_dev) ** 2
+            current_fix.position_covariance[8] = 0.1#(hdop/100 * self.alt_std_dev) ** 2  # FIXME
 
-            self.fix_pub.publish(current_fix)
+            # self.get_logger().info(f"{fix_type}")
+            if fix_type >= 1:
+                self.fix_pub.publish(current_fix)
 
             if not math.isnan(data['utc_time']):
                 current_time_ref.time_ref = rclpy.time.Time(seconds=data['utc_time']).to_msg()
@@ -262,12 +266,12 @@ class Ros2NMEADriver(Node):
         elif 'HDT' in parsed_sentence:
             data = parsed_sentence['HDT']
             if data['heading']:
-                # self.get_logger().info(f"{data['heading']}")
-                current_heading = PointStamped()
-                current_heading.header.stamp = current_time
-                current_heading.header.frame_id = frame_id
-                current_heading.point.z = data['heading']
-                self.heading_pub.publish(current_heading)
+                if self.status_type >= 1:
+                    current_heading = PointStamped()
+                    current_heading.header.stamp = current_time
+                    current_heading.header.frame_id = frame_id
+                    current_heading.point.z = data['heading']
+                    self.heading_pub.publish(current_heading)
                 # # old
                 # current_heading = QuaternionStamped()
                 # current_heading.header.stamp = current_time
