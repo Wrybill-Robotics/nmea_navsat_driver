@@ -162,40 +162,40 @@ class Ros2NMEADriver(Node):
                 self.valid_fix = True
             else:
                 self.valid_fix = False
-
-            # if fix_type==4:
+            
+            # store fixed type for HEADING
             self.status_type = fix_type
+
+            if self.status_type==4:
             # self.get_logger().info(f"{self.status_type}")
-            current_fix.status.service = NavSatStatus.SERVICE_GPS
-            latitude = data['latitude']
-            if data['latitude_direction'] == 'S':
-                latitude = -latitude
-            current_fix.latitude = latitude
+                current_fix.status.service = NavSatStatus.SERVICE_GPS
+                latitude = data['latitude']
+                if data['latitude_direction'] == 'S':
+                    latitude = -latitude
+                current_fix.latitude = latitude
 
-            longitude = data['longitude']
-            if data['longitude_direction'] == 'W':
-                longitude = -longitude
-            current_fix.longitude = longitude
+                longitude = data['longitude']
+                if data['longitude_direction'] == 'W':
+                    longitude = -longitude
+                current_fix.longitude = longitude
 
-            # Altitude is above ellipsoid, so adjust for mean-sea-level
-            altitude = data['altitude'] + data['mean_sea_level']
-            current_fix.altitude = altitude
+                # Altitude is above ellipsoid, so adjust for mean-sea-level
+                altitude = data['altitude'] + data['mean_sea_level']
+                current_fix.altitude = altitude
 
-            # use default epe std_dev unless we've received a GST sentence with epes
-            if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
-                self.lon_std_dev = default_epe
-            if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
-                self.lat_std_dev = default_epe
-            if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
-                self.alt_std_dev = default_epe * 2
+                # use default epe std_dev unless we've received a GST sentence with epes
+                if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
+                    self.lon_std_dev = default_epe
+                if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
+                    self.lat_std_dev = default_epe
+                if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
+                    self.alt_std_dev = default_epe * 2
 
-            hdop = data['hdop']
-            current_fix.position_covariance[0] = 0.1#(hdop/100 * self.lon_std_dev) ** 2
-            current_fix.position_covariance[4] = 0.1#(hdop/100 * self.lat_std_dev) ** 2
-            current_fix.position_covariance[8] = 0.1#(hdop/100 * self.alt_std_dev) ** 2  # FIXME
+                hdop = data['hdop']
+                current_fix.position_covariance[0] = (hdop/100 * self.lon_std_dev) ** 2
+                current_fix.position_covariance[4] = (hdop/100 * self.lat_std_dev) ** 2
+                current_fix.position_covariance[8] = (hdop/100 * self.alt_std_dev) ** 2  # FIXME
 
-            # self.get_logger().info(f"{fix_type}")
-            if fix_type >= 1:
                 self.fix_pub.publish(current_fix)
 
             if not math.isnan(data['utc_time']):
@@ -266,7 +266,7 @@ class Ros2NMEADriver(Node):
         elif 'HDT' in parsed_sentence:
             data = parsed_sentence['HDT']
             if data['heading']:
-                if self.status_type >= 1:
+                if self.status_type == 4:
                     current_heading = PointStamped()
                     current_heading.header.stamp = current_time
                     current_heading.header.frame_id = frame_id
