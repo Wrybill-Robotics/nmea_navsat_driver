@@ -36,7 +36,7 @@ import rclpy
 
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
-from geometry_msgs.msg import TwistStamped, QuaternionStamped
+from geometry_msgs.msg import TwistStamped, QuaternionStamped, PointStamped
 from sensor_msgs.msg import Imu
 from tf_transformations import quaternion_from_euler
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
@@ -49,7 +49,7 @@ class Ros2NMEADriver(Node):
 
         self.fix_pub = self.create_publisher(NavSatFix, 'fix', 10)
         self.vel_pub = self.create_publisher(TwistStamped, 'vel', 10)
-        self.heading_pub = self.create_publisher(QuaternionStamped, 'heading', 10)
+        self.heading_pub = self.create_publisher(PointStamped, 'heading', 10)
         self.time_ref_pub = self.create_publisher(TimeReference, 'time_reference', 10)
 
         self.time_ref_source = self.declare_parameter('time_ref_source', 'gps').value
@@ -162,36 +162,41 @@ class Ros2NMEADriver(Node):
                 self.valid_fix = True
             else:
                 self.valid_fix = False
+            
+            # store fixed type for HEADING
+            self.status_type = fix_type
 
-            current_fix.status.service = NavSatStatus.SERVICE_GPS
-            latitude = data['latitude']
-            if data['latitude_direction'] == 'S':
-                latitude = -latitude
-            current_fix.latitude = latitude
+            if self.status_type==4:
+            # self.get_logger().info(f"{self.status_type}")
+                current_fix.status.service = NavSatStatus.SERVICE_GPS
+                latitude = data['latitude']
+                if data['latitude_direction'] == 'S':
+                    latitude = -latitude
+                current_fix.latitude = latitude
 
-            longitude = data['longitude']
-            if data['longitude_direction'] == 'W':
-                longitude = -longitude
-            current_fix.longitude = longitude
+                longitude = data['longitude']
+                if data['longitude_direction'] == 'W':
+                    longitude = -longitude
+                current_fix.longitude = longitude
 
-            # Altitude is above ellipsoid, so adjust for mean-sea-level
-            altitude = data['altitude'] + data['mean_sea_level']
-            current_fix.altitude = altitude
+                # Altitude is above ellipsoid, so adjust for mean-sea-level
+                altitude = data['altitude'] + data['mean_sea_level']
+                current_fix.altitude = altitude
 
-            # use default epe std_dev unless we've received a GST sentence with epes
-            if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
-                self.lon_std_dev = default_epe
-            if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
-                self.lat_std_dev = default_epe
-            if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
-                self.alt_std_dev = default_epe * 2
+                # use default epe std_dev unless we've received a GST sentence with epes
+                if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
+                    self.lon_std_dev = default_epe
+                if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
+                    self.lat_std_dev = default_epe
+                if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
+                    self.alt_std_dev = default_epe * 2
 
-            hdop = data['hdop']
-            current_fix.position_covariance[0] = (hdop * self.lon_std_dev) ** 2
-            current_fix.position_covariance[4] = (hdop * self.lat_std_dev) ** 2
-            current_fix.position_covariance[8] = (2 * hdop * self.alt_std_dev) ** 2  # FIXME
+                hdop = data['hdop']
+                current_fix.position_covariance[0] = (hdop/100 * self.lon_std_dev) ** 2
+                current_fix.position_covariance[4] = (hdop/100 * self.lat_std_dev) ** 2
+                current_fix.position_covariance[8] = (hdop/100 * self.alt_std_dev) ** 2  # FIXME
 
-            self.fix_pub.publish(current_fix)
+                self.fix_pub.publish(current_fix)
 
             if not math.isnan(data['utc_time']):
                 current_time_ref.time_ref = rclpy.time.Time(seconds=data['utc_time']).to_msg()
@@ -261,35 +266,29 @@ class Ros2NMEADriver(Node):
         elif 'HDT' in parsed_sentence:
             data = parsed_sentence['HDT']
             if data['heading']:
-                # publishes heading as an Imu message for Navsat_transform
-                # current_heading = Imu()
+                if self.status_type == 4:
+                    current_heading = PointStamped()
+                    current_heading.header.stamp = current_time
+                    current_heading.header.frame_id = frame_id
+                    current_heading.point.z = data['heading']
+                    self.heading_pub.publish(current_heading)
+                # # old
+                # current_heading = QuaternionStamped()
                 # current_heading.header.stamp = current_time
                 # current_heading.header.frame_id = frame_id
                 # q = quaternion_from_euler(0, 0, math.radians(data['heading']))
-                # current_heading.orientation.x = q[0]
-                # current_heading.orientation.y = q[1]
-                # current_heading.orientation.z = q[2]
-                # current_heading.orientation.w = q[3]
-                # current_heading.orientation_covariance[0] = 0.0
-                # current_heading.orientation_covariance[4] = 0.0
-                # current_heading.orientation_covariance[8] = 0.0000068539
-                # # old
-                current_heading = QuaternionStamped()
-                current_heading.header.stamp = current_time
-                current_heading.header.frame_id = frame_id
-                q = quaternion_from_euler(0, 0, math.radians(data['heading']))
-                current_heading.quaternion.x = q[0]
-                current_heading.quaternion.y = q[1]
-                current_heading.quaternion.z = q[2]
-                current_heading.quaternion.w = q[3]
-                self.heading_pub.publish(current_heading)
+                # current_heading.quaternion.x = q[0]
+                # current_heading.quaternion.y = q[1]
+                # current_heading.quaternion.z = q[2]
+                # current_heading.quaternion.w = q[3]
+                # self.heading_pub.publish(current_heading)
         else:
             return False
         return True
 
     """Helper method for getting the frame_id with the correct TF prefix"""
     def get_frame_id(self):
-        frame_id = self.declare_parameter('frame_id', 'gps').value
+        frame_id = self.declare_parameter('frame_id', 'gps_link').value
         prefix = self.declare_parameter('tf_prefix', '').value
         if len(prefix):
             return '%s/%s' % (prefix, frame_id)

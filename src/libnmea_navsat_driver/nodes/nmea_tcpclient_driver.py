@@ -66,9 +66,11 @@ def main(args=None):
                 for data in full_lines:
                     try:
                         if driver.add_sentence(data, frame_id):
-                            driver.get_logger().info("Received sentence: %s" % data)
+                            # driver.get_logger().info("Received sentence: %s" % data)
+                            continue
                         else:
                             driver.get_logger().warn("Error with sentence: %s" % data)
+                            continue
                     except ValueError as e:
                         driver.get_logger().warn(
                             "Value error, likely due to missing fields in the NMEA message. "

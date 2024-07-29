@@ -1,5 +1,6 @@
-nmea_navsat_driver:
+nmea:
   ros__parameters:
-    ip: "192.168.131.22"
-    port: 9001
-    buffer_size: 4096
+    ip: "60.52.113.17"
+    port: 55556
+    buffer_size: 8192
+    frame_id: 'gps_link'
