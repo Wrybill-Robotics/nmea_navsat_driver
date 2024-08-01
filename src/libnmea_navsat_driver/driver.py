@@ -77,45 +77,45 @@ class Ros2NMEADriver(Node):
             # Unknown
             -1: [
                 self.default_epe_quality0,
-                NavSatStatus.STATUS_NO_FIX,
+                -1,
                 NavSatFix.COVARIANCE_TYPE_UNKNOWN
             ],
             # Invalid
             0: [
                 self.default_epe_quality0,
-                NavSatStatus.STATUS_NO_FIX,
+                0,
                 NavSatFix.COVARIANCE_TYPE_UNKNOWN
             ],
             # SPS
             1: [
                 self.default_epe_quality1,
-                NavSatStatus.STATUS_FIX,
+                1,
                 NavSatFix.COVARIANCE_TYPE_APPROXIMATED
             ],
             # DGPS
             2: [
                 self.default_epe_quality2,
-                NavSatStatus.STATUS_SBAS_FIX,
+                2,
                 NavSatFix.COVARIANCE_TYPE_APPROXIMATED
             ],
             # RTK Fix
             4: [
                 self.default_epe_quality4,
-                NavSatStatus.STATUS_GBAS_FIX,
+                4,
                 NavSatFix.COVARIANCE_TYPE_APPROXIMATED
             ],
             # RTK Float
             5: [
                 self.default_epe_quality5,
-                NavSatStatus.STATUS_GBAS_FIX,
-                NavSatFix.COVARIANCE_TYPE_APPROXIMATED
-            ],
-            # WAAS
-            9: [
-                self.default_epe_quality9,
-                NavSatStatus.STATUS_GBAS_FIX,
+                5,
                 NavSatFix.COVARIANCE_TYPE_APPROXIMATED
             ]
+            # # WAAS
+            # 9: [
+            #     self.default_epe_quality9,
+            #     NavSatStatus.STATUS_GBAS_FIX,
+            #     NavSatFix.COVARIANCE_TYPE_APPROXIMATED
+            # ]
         }
 
     # Returns True if we successfully did something with the passed in
@@ -162,41 +162,36 @@ class Ros2NMEADriver(Node):
                 self.valid_fix = True
             else:
                 self.valid_fix = False
-            
-            # store fixed type for HEADING
-            self.status_type = fix_type
 
-            if self.status_type==4:
-            # self.get_logger().info(f"{self.status_type}")
-                current_fix.status.service = NavSatStatus.SERVICE_GPS
-                latitude = data['latitude']
-                if data['latitude_direction'] == 'S':
-                    latitude = -latitude
-                current_fix.latitude = latitude
+            current_fix.status.service = NavSatStatus.SERVICE_GPS
+            latitude = data['latitude']
+            if data['latitude_direction'] == 'S':
+                latitude = -latitude
+            current_fix.latitude = latitude
 
-                longitude = data['longitude']
-                if data['longitude_direction'] == 'W':
-                    longitude = -longitude
-                current_fix.longitude = longitude
+            longitude = data['longitude']
+            if data['longitude_direction'] == 'W':
+                longitude = -longitude
+            current_fix.longitude = longitude
 
-                # Altitude is above ellipsoid, so adjust for mean-sea-level
-                altitude = data['altitude'] + data['mean_sea_level']
-                current_fix.altitude = altitude
+            # Altitude is above ellipsoid, so adjust for mean-sea-level
+            altitude = data['altitude'] + data['mean_sea_level']
+            current_fix.altitude = altitude
 
-                # use default epe std_dev unless we've received a GST sentence with epes
-                if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
-                    self.lon_std_dev = default_epe
-                if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
-                    self.lat_std_dev = default_epe
-                if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
-                    self.alt_std_dev = default_epe * 2
+            # use default epe std_dev unless we've received a GST sentence with epes
+            if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
+                self.lon_std_dev = default_epe
+            if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
+                self.lat_std_dev = default_epe
+            if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
+                self.alt_std_dev = default_epe * 2
 
-                hdop = data['hdop']
-                current_fix.position_covariance[0] = (hdop/100 * self.lon_std_dev) ** 2
-                current_fix.position_covariance[4] = (hdop/100 * self.lat_std_dev) ** 2
-                current_fix.position_covariance[8] = (hdop/100 * self.alt_std_dev) ** 2  # FIXME
+            hdop = data['hdop']
+            current_fix.position_covariance[0] = (hdop/100 * self.lon_std_dev) ** 2
+            current_fix.position_covariance[4] = (hdop/100 * self.lat_std_dev) ** 2
+            current_fix.position_covariance[8] = (hdop/100 * self.alt_std_dev) ** 2  # FIXME
 
-                self.fix_pub.publish(current_fix)
+            self.fix_pub.publish(current_fix)
 
             if not math.isnan(data['utc_time']):
                 current_time_ref.time_ref = rclpy.time.Time(seconds=data['utc_time']).to_msg()
@@ -266,22 +261,12 @@ class Ros2NMEADriver(Node):
         elif 'HDT' in parsed_sentence:
             data = parsed_sentence['HDT']
             if data['heading']:
-                if self.status_type == 4:
-                    current_heading = PointStamped()
-                    current_heading.header.stamp = current_time
-                    current_heading.header.frame_id = frame_id
-                    current_heading.point.z = data['heading']
-                    self.heading_pub.publish(current_heading)
-                # # old
-                # current_heading = QuaternionStamped()
-                # current_heading.header.stamp = current_time
-                # current_heading.header.frame_id = frame_id
-                # q = quaternion_from_euler(0, 0, math.radians(data['heading']))
-                # current_heading.quaternion.x = q[0]
-                # current_heading.quaternion.y = q[1]
-                # current_heading.quaternion.z = q[2]
-                # current_heading.quaternion.w = q[3]
-                # self.heading_pub.publish(current_heading)
+                # publish heading as PointStamped to allow for time stamped msgs
+                current_heading = PointStamped()
+                current_heading.header.stamp = current_time
+                current_heading.header.frame_id = frame_id
+                current_heading.point.z = data['heading']
+                self.heading_pub.publish(current_heading)
         else:
             return False
         return True
