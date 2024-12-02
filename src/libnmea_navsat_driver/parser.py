@@ -38,13 +38,11 @@ import rclpy
 
 logger = rclpy.logging.get_logger('nmea_navsat_driver')
 
-
 def safe_float(field):
     try:
         return float(field)
     except ValueError:
         return float('NaN')
-
 
 def safe_int(field):
     try:
@@ -52,14 +50,12 @@ def safe_int(field):
     except ValueError:
         return 0
 
-
 def convert_latitude(field):
     return safe_float(field[0:2]) + safe_float(field[2:]) / 60.0
 
 
 def convert_longitude(field):
     return safe_float(field[0:3]) + safe_float(field[3:]) / 60.0
-
 
 def convert_time(nmea_utc):
     # Get current time in UTC for date information
@@ -78,7 +74,6 @@ def convert_time(nmea_utc):
         unix_time = calendar.timegm(tuple(utc_list))
         return unix_time
 
-
 def convert_status_flag(status_flag):
     if status_flag == "A":
         return True
@@ -87,10 +82,8 @@ def convert_status_flag(status_flag):
     else:
         return False
 
-
 def convert_knots_to_mps(knots):
     return safe_float(knots) * 0.514444444444
-
 
 # Need this wrapper because math.radians doesn't auto convert inputs
 def convert_deg_to_rads(degs):
@@ -115,7 +108,6 @@ def convert_heading_to_enu(field):
             heading_yaw = heading_yaw + 360
 
         return safe_float(heading_yaw)
-
 
 """Format for this dictionary is a sentence identifier (e.g. "GGA") as the key, with a
 list of tuples where each tuple is a field name, conversion function and index
@@ -157,12 +149,47 @@ parse_maps = {
         ("heading", safe_float, 1),
         # ("heading", convert_heading_to_enu, 1)
     ],
+    "BESTPOSA": [
+        ("solution_status", str, 1),  # Solution status (e.g., SOL_COMPUTED)
+        ("position_type", str, 2),  # Position type (e.g., NARROW_INT)
+        ("latitude", safe_float, 3),  # Latitude in degrees
+        ("longitude", safe_float, 4),  # Longitude in degrees
+        ("altitude", safe_float, 5),  # Altitude above the ellipsoid
+        ("undulation", safe_float, 6),  # Geoid separation
+        ("datum", str, 6),  # Datum (e.g., WGS84)
+        ("lat_std_dev", safe_float, 7),  # Latitude standard deviation
+        ("lon_std_dev", safe_float, 8),  # Longitude standard deviation
+        ("alt_std_dev", safe_float, 9),  # Altitude standard deviation
+        ("covariance", safe_float, 10),  # Position covariance
+    ],
+    "HEADINGA": [
+        ("solution_status", str, 1),  # Solution status (see Table 4-2)
+        ("position_type", str, 2),  # Heading status (see Table 4-3)
+        ("baseline_length", safe_float, 3),  # Heading baseline length (m)
+        ("heading", safe_float, 4),  # Heading (0~360°)
+        ("pitch", safe_float, 5),  # Pitch (-90~+90°)
+        ("reserved", safe_float, 6),  # Reserved
+        ("heading_std_dev", safe_float, 7),  # Heading standard deviation (°)
+        ("pitch_std_dev", safe_float, 8),  # Pitch standard deviation (°)
+        ("rover_station_id", str, 9),  # Rover station ID
+        ("master_station_id", str, 10),  # Master station ID
+        ("num_satellites_tracked", int, 11),  # Number of satellites tracked
+        ("num_satellites_used_in_heading", int, 12),  # Number of satellites used in heading
+        ("num_observations", int, 13),  # Number of satellites above elevation of heading antenna
+        ("num_l2_satellites", int, 14),  # Number of L2 satellites above elevation of heading antenna
+        ("solution_source", str, 15),  # Solution source (see Table 4-8)
+        ("extended_solution_status", int, 16),  # Extended solution status (see Table 4-4)
+        ("galileo_beidou_signal_mask", str, 17),  # Galileo and BeiDou signal mask (see Table 4-5)
+        # ("gps_glonass_signal_mask", str, 18),  # GPS and GLONASS signal mask (see Table 4-5)
+        # ("gps_glonass_mask", str, 19),  # GPS-GLONASS mask
+        # ("crc", str, 21),  # 32-bit CRC check code
+        # ("terminator", str, 22),  # Message terminator (ASCII only)
+    ],
     "VTG": [
         ("true_course", convert_deg_to_rads, 1),
         ("speed", convert_knots_to_mps, 5)
     ]
 }
-
 
 def parse_nmea_sentence(nmea_sentence):
     # Check for a valid nmea sentence
@@ -188,3 +215,62 @@ def parse_nmea_sentence(nmea_sentence):
         parsed_sentence[entry[0]] = entry[1](fields[entry[2]])
 
     return {sentence_type: parsed_sentence}
+
+def parse_bynav_sentence(bynav_sentence):
+    # Validate message format (must start with '#' and contain '*XXXXXXXX')
+    if not re.match(r'^\#.*\*[0-9A-Fa-f]{8}$', bynav_sentence):
+        logger.debug(f"Regex didn't match, sentence not valid ByNAV? Sentence was: {repr(bynav_sentence)}")
+        return False
+
+    # Extract sentence body and type
+    sentence_body = bynav_sentence[bynav_sentence.find(';') + 1 : bynav_sentence.find('*')]
+    sentence_type = bynav_sentence[1 : bynav_sentence.find(',')].strip()
+    logger.debug(f"Detected sentence type: {sentence_type}")
+    logger.debug(f"Sentence body: {sentence_body}")
+
+    # Split the sentence into fields
+    fields = [field.strip() for field in sentence_body.split(',')]
+    logger.debug("Fields with indices:")
+    # logger.debug(f"Message Type")
+    # for i, field in enumerate(fields, start=1):
+    #     logger.info(f"  [{i}]: {field}")
+
+    # sentence_type = fields[0]  # ByNAV sentence type follows the '#'
+    # sentence_type = bynav_sentence[1:bynav_sentence.find(',')].strip()
+    # logger.info(f"Detected sentence type: {sentence_type}")
+    
+    # logger.info(f"Fields with indices: {[f'ID {i}: {field}' for i, field in enumerate(fields, start=1)]}")
+
+
+    # logger.info(f"Fields and indices from the sentence: {[(i, field) for i, field in enumerate(fields)]}")
+
+    # Check if the sentence type is supported
+    if sentence_type not in parse_maps:
+        logger.warning(f"Sentence type {repr(sentence_type)} not in parse map, ignoring.")
+        return False
+
+    parse_map = parse_maps[sentence_type]
+    # logger.info("Parse map:")
+    # for entry in parse_map:
+    #     field_name = entry[0]
+    #     conversion_func = entry[1]
+    #     field_index = entry[2]
+    #     logger.info(f"  Field: {field_name}, Converter: {conversion_func}, Index: {field_index}")
+    # logger.info(f"Parse map: {repr(parse_map)}")
+
+    
+    # Parse fields based on the map
+    parsed_sentence = {}
+    for entry in parse_map:
+        try:
+            # parsed_sentence[entry[0]] = entry[1](fields[entry[2]])
+            value = fields[entry[2]-1]
+            parsed_sentence[entry[0]] = entry[1](value)
+            logger.debug(f"Parsing field {entry[0]} (index {entry[2]}): {value} -> {parsed_sentence[entry[0]]}")
+
+        except (IndexError, ValueError) as e:
+            logger.warning(f"Failed to parse field {entry[0]} in sentence: {bynav_sentence} - {e}")
+            parsed_sentence[entry[0]] = None
+
+    return {sentence_type: parsed_sentence}
+

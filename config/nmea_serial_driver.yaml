@@ -1,6 +1,6 @@
 nmea:
   ros__parameters:
-    port: "/dev/gps"
+    port: "/dev/ttyUSB1"
     baud: 115200
     frame_id: "gps_link"
     time_ref_source: "gps_link"

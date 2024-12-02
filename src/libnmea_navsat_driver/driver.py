@@ -39,7 +39,7 @@ from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
 from geometry_msgs.msg import TwistStamped, QuaternionStamped, PointStamped
 from sensor_msgs.msg import Imu
 from tf_transformations import quaternion_from_euler
-from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
+from libnmea_navsat_driver.checksum_utils import check_nmea_checksum, check_bynav_checksum
 from libnmea_navsat_driver import parser
 
 
@@ -121,15 +121,35 @@ class Ros2NMEADriver(Node):
     # Returns True if we successfully did something with the passed in
     # nmea_string
     def add_sentence(self, nmea_string, frame_id, timestamp=None):
-        if not check_nmea_checksum(nmea_string):
-            self.get_logger().warn("Received a sentence with an invalid checksum. " +
-                                   "Sentence was: %s" % nmea_string)
-            return False
+        parsed_sentence = ''
 
-        parsed_sentence = parser.parse_nmea_sentence(nmea_string)
-        if not parsed_sentence:
-            self.get_logger().debug("Failed to parse NMEA sentence. Sentence was: %s" % nmea_string)
-            return False
+        if nmea_string[0] == '$':
+            self.get_logger().debug(f"NMEA Sentence: {nmea_string}")
+            
+            if not check_nmea_checksum(nmea_string):
+                self.get_logger().warn("Received a sentence with an invalid checksum. " +
+                                    "Sentence was: %s" % nmea_string)
+                return False
+
+            parsed_sentence = parser.parse_nmea_sentence(nmea_string)
+            if not parsed_sentence:
+                self.get_logger().debug("Failed to parse NMEA sentence. Sentence was: %s" % nmea_string)
+                return False
+
+        elif nmea_string[0] == '#':
+            # self.get_logger().info(f"ByNAV Sentence: {nmea_string}")
+
+            # if not check_bynav_checksum(nmea_string):
+            #     self.get_logger().warn("Received a sentence with an invalid checksum. " +
+            #                         "Sentence was: %s" % nmea_string)
+            #     return False
+
+            parsed_sentence = parser.parse_bynav_sentence(nmea_string)
+            self.get_logger().info(f"Parsed Sentence: {parsed_sentence}")
+            return True
+            # if not parsed_sentence:
+            #     self.get_logger().debug("Failed to parse ByNAV sentence. Sentence was: %s" % nmea_string)
+            #     return False
 
         if timestamp:
             current_time = timestamp
@@ -263,15 +283,61 @@ class Ros2NMEADriver(Node):
             self.lon_std_dev = data['lon_std_dev']
             self.lat_std_dev = data['lat_std_dev']
             self.alt_std_dev = data['alt_std_dev']
-        elif 'HDT' in parsed_sentence:
-            data = parsed_sentence['HDT']
-            if data['heading']:
-                if self.status_type == 4:
-                    current_heading = PointStamped()
-                    current_heading.header.stamp = current_time
-                    current_heading.header.frame_id = frame_id
-                    current_heading.point.z = data['heading']
-                    self.heading_pub.publish(current_heading)
+        elif 'BESTPOSA' in parsed_sentence:
+            data = parsed_sentence['BESTPOSA']
+            if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
+                current_fix.status.status = NavSatStatus.STATUS_FIX
+                current_fix.status.service = NavSatStatus.SERVICE_GPS
+
+                current_fix.latitude = data['latitude']
+                current_fix.longitude = data['longitude']
+                current_fix.altitude = data['altitude']  # Altitude above ellipsoid
+
+                # Position covariance
+                lat_std_dev = data.get('lat_std_dev', float('NaN'))
+                lon_std_dev = data.get('lon_std_dev', float('NaN'))
+                alt_std_dev = data.get('alt_std_dev', float('NaN'))
+                
+                if not math.isnan(lat_std_dev) and not math.isnan(lon_std_dev) and not math.isnan(alt_std_dev):
+                    current_fix.position_covariance[0] = lat_std_dev ** 2
+                    current_fix.position_covariance[4] = lon_std_dev ** 2
+                    current_fix.position_covariance[8] = alt_std_dev ** 2
+                    current_fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_DIAGONAL_KNOWN
+                else:
+                    current_fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_UNKNOWN
+
+                # Publish the fix message
+                self.fix_pub.publish(current_fix)
+
+        # elif 'HEADINGA' in parsed_sentence:
+        #     data = parsed_sentence['HEADINGA']
+        #     if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
+        #         current_heading = PointStamped()
+        #         current_heading.header.stamp = current_time
+        #         current_heading.header.frame_id = frame_id
+
+        #         # Set heading and pitch
+        #         current_heading.point.z = data['heading']  # Heading in degrees
+        #         current_heading.point.y = data['pitch']  # Pitch in degrees (optional usage)
+
+        #         # Publish the heading message
+        #         self.heading_pub.publish(current_heading)
+
+        #         # Log standard deviations for debugging or optional use
+        #         heading_std_dev = data.get('heading_std_dev', None)
+        #         pitch_std_dev = data.get('pitch_std_dev', None)
+        #         if heading_std_dev or pitch_std_dev:
+        #             self.get_logger().debug(f"HEADINGA Std Dev: Heading={heading_std_dev}, Pitch={pitch_std_dev}")
+
+        # elif 'HDT' in parsed_sentence:
+        #     data = parsed_sentence['HDT']
+        #     if data['heading']:
+        #         if self.status_type == 4:
+        #             current_heading = PointStamped()
+        #             current_heading.header.stamp = current_time
+        #             current_heading.header.frame_id = frame_id
+        #             current_heading.point.z = data['heading']
+        #             self.heading_pub.publish(current_heading)
                 # # old
                 # current_heading = QuaternionStamped()
                 # current_heading.header.stamp = current_time
@@ -282,6 +348,8 @@ class Ros2NMEADriver(Node):
                 # current_heading.quaternion.z = q[2]
                 # current_heading.quaternion.w = q[3]
                 # self.heading_pub.publish(current_heading)
+        # elif 'HEADINGA' in parsed_sentence:
+        #     print("DING DING")
         else:
             return False
         return True
