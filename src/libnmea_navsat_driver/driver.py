@@ -38,7 +38,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
 from geometry_msgs.msg import TwistStamped, QuaternionStamped, PointStamped
 from sensor_msgs.msg import Imu
-from tf_transformations import quaternion_from_euler
+from tf_transformations import quaternion_from_euler 
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum, check_bynav_checksum
 from libnmea_navsat_driver import parser
 
@@ -50,6 +50,7 @@ class Ros2NMEADriver(Node):
         self.fix_pub = self.create_publisher(NavSatFix, 'fix', 10)
         self.vel_pub = self.create_publisher(TwistStamped, 'vel', 10)
         self.heading_pub = self.create_publisher(PointStamped, 'heading', 10)
+        self.imu_pub = self.create_publisher(Imu, 'heading_imu', 10)
         self.time_ref_pub = self.create_publisher(TimeReference, 'time_reference', 10)
 
         self.time_ref_source = self.declare_parameter('time_ref_source', 'gps').value
@@ -135,22 +136,14 @@ class Ros2NMEADriver(Node):
             if not parsed_sentence:
                 self.get_logger().debug("Failed to parse NMEA sentence. Sentence was: %s" % nmea_string)
                 return False
+            
+            # self.get_logger().info(f"Parsing NMEA")
 
         elif nmea_string[0] == '#':
-            # self.get_logger().info(f"ByNAV Sentence: {nmea_string}")
-
-            # if not check_bynav_checksum(nmea_string):
-            #     self.get_logger().warn("Received a sentence with an invalid checksum. " +
-            #                         "Sentence was: %s" % nmea_string)
-            #     return False
-
+            # self.get_logger().info(f"Parsing BYNAV")
             parsed_sentence = parser.parse_bynav_sentence(nmea_string)
-            self.get_logger().info(f"Parsed Sentence: {parsed_sentence}")
-            return True
-            # if not parsed_sentence:
-            #     self.get_logger().debug("Failed to parse ByNAV sentence. Sentence was: %s" % nmea_string)
-            #     return False
-
+            
+        
         if timestamp:
             current_time = timestamp
         else:
@@ -283,6 +276,7 @@ class Ros2NMEADriver(Node):
             self.lon_std_dev = data['lon_std_dev']
             self.lat_std_dev = data['lat_std_dev']
             self.alt_std_dev = data['alt_std_dev']
+
         elif 'BESTPOSA' in parsed_sentence:
             data = parsed_sentence['BESTPOSA']
             if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
@@ -309,26 +303,58 @@ class Ros2NMEADriver(Node):
                 # Publish the fix message
                 self.fix_pub.publish(current_fix)
 
-        # elif 'HEADINGA' in parsed_sentence:
-        #     data = parsed_sentence['HEADINGA']
-        #     if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
-        #         current_heading = PointStamped()
-        #         current_heading.header.stamp = current_time
-        #         current_heading.header.frame_id = frame_id
+        elif 'HEADINGA' in parsed_sentence:
+            data = parsed_sentence['HEADINGA']
+            if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
+                current_heading = PointStamped()
+                current_heading.header.stamp = current_time
+                current_heading.header.frame_id = frame_id
 
-        #         # Set heading and pitch
-        #         current_heading.point.z = data['heading']  # Heading in degrees
-        #         current_heading.point.y = data['pitch']  # Pitch in degrees (optional usage)
+                # Set heading and pitch
+                current_heading.point.z = data['heading']  # Heading in degrees
+                current_heading.point.y = data['pitch']  # Pitch in degrees (optional usage)
 
-        #         # Publish the heading message
-        #         self.heading_pub.publish(current_heading)
+                # Publish the heading message
+                self.heading_pub.publish(current_heading)
+                # Log standard deviations for debugging or optional use
+                heading_std_dev = data.get('heading_std_dev', None)
+                pitch_std_dev = data.get('pitch_std_dev', None)
+                if heading_std_dev or pitch_std_dev:
+                    self.get_logger().debug(f"HEADINGA Std Dev: Heading={heading_std_dev}, Pitch={pitch_std_dev}")
 
-        #         # Log standard deviations for debugging or optional use
-        #         heading_std_dev = data.get('heading_std_dev', None)
-        #         pitch_std_dev = data.get('pitch_std_dev', None)
-        #         if heading_std_dev or pitch_std_dev:
-        #             self.get_logger().debug(f"HEADINGA Std Dev: Heading={heading_std_dev}, Pitch={pitch_std_dev}")
+                # Publish IMU message
+                imu_message = Imu()
+                imu_message.header.stamp = current_time
+                imu_message.header.frame_id = frame_id
 
+                # Convert heading (yaw) and pitch to a quaternion
+                heading_radians = math.radians(data['heading'])
+                pitch_radians = math.radians(data['pitch'])
+                roll_radians = 0.0  # Assuming no roll data available
+
+                # Use tf transformations to convert to quaternion
+                q = quaternion_from_euler(roll_radians, pitch_radians, heading_radians)
+                imu_message.orientation.x = q[0]
+                imu_message.orientation.y = q[1]
+                imu_message.orientation.z = q[2]
+                imu_message.orientation.w = q[3]
+
+                # Populate orientation covariance if available
+                if heading_std_dev and pitch_std_dev:
+                    imu_message.orientation_covariance = [
+                        pitch_std_dev ** 2, 0.0, 0.0,
+                        0.0, heading_std_dev ** 2, 0.0,
+                        0.0, 0.0, float('NaN')  # No roll covariance available
+                    ]
+                else:
+                    imu_message.orientation_covariance = [
+                        float('NaN'), 0.0, 0.0,
+                        0.0, float('NaN'), 0.0,
+                        0.0, 0.0, float('NaN')
+                    ]
+                # Publish the IMU message
+                self.imu_pub.publish(imu_message)
+                # self.get_logger().info(f"Published IMU: Orientation={q}, Covariance={imu_message.orientation_covariance}")
         # elif 'HDT' in parsed_sentence:
         #     data = parsed_sentence['HDT']
         #     if data['heading']:
