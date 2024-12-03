@@ -137,13 +137,12 @@ class Ros2NMEADriver(Node):
                 self.get_logger().debug("Failed to parse NMEA sentence. Sentence was: %s" % nmea_string)
                 return False
             
-            # self.get_logger().info(f"Parsing NMEA")
+            self.get_logger().info(f"Parsing NMEA {parsed_sentence}")
 
         elif nmea_string[0] == '#':
             # self.get_logger().info(f"Parsing BYNAV")
             parsed_sentence = parser.parse_bynav_sentence(nmea_string)
             
-        
         if timestamp:
             current_time = timestamp
         else:
@@ -152,6 +151,7 @@ class Ros2NMEADriver(Node):
         current_fix = NavSatFix()
         current_fix.header.stamp = current_time
         current_fix.header.frame_id = frame_id
+
         current_time_ref = TimeReference()
         current_time_ref.header.stamp = current_time
         current_time_ref.header.frame_id = frame_id
@@ -175,41 +175,36 @@ class Ros2NMEADriver(Node):
                 self.valid_fix = True
             else:
                 self.valid_fix = False
-            
-            # store fixed type for HEADING
-            self.status_type = fix_type
 
-            if self.status_type==4:
-            # self.get_logger().info(f"{self.status_type}")
-                current_fix.status.service = NavSatStatus.SERVICE_GPS
-                latitude = data['latitude']
-                if data['latitude_direction'] == 'S':
-                    latitude = -latitude
-                current_fix.latitude = latitude
+            current_fix.status.service = NavSatStatus.SERVICE_GPS
+            latitude = data['latitude']
+            if data['latitude_direction'] == 'S':
+                latitude = -latitude
+            current_fix.latitude = latitude
 
-                longitude = data['longitude']
-                if data['longitude_direction'] == 'W':
-                    longitude = -longitude
-                current_fix.longitude = longitude
+            longitude = data['longitude']
+            if data['longitude_direction'] == 'W':
+                longitude = -longitude
+            current_fix.longitude = longitude
 
-                # Altitude is above ellipsoid, so adjust for mean-sea-level
-                altitude = data['altitude'] + data['mean_sea_level']
-                current_fix.altitude = altitude
+            # Altitude is above ellipsoid, so adjust for mean-sea-level
+            altitude = data['altitude'] + data['mean_sea_level']
+            current_fix.altitude = altitude
 
-                # use default epe std_dev unless we've received a GST sentence with epes
-                if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
-                    self.lon_std_dev = default_epe
-                if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
-                    self.lat_std_dev = default_epe
-                if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
-                    self.alt_std_dev = default_epe * 2
+            # use default epe std_dev unless we've received a GST sentence with epes
+            if not self.using_receiver_epe or math.isnan(self.lon_std_dev):
+                self.lon_std_dev = default_epe
+            if not self.using_receiver_epe or math.isnan(self.lat_std_dev):
+                self.lat_std_dev = default_epe
+            if not self.using_receiver_epe or math.isnan(self.alt_std_dev):
+                self.alt_std_dev = default_epe * 2
 
-                hdop = data['hdop']
-                current_fix.position_covariance[0] = (hdop/100 * self.lon_std_dev) ** 2
-                current_fix.position_covariance[4] = (hdop/100 * self.lat_std_dev) ** 2
-                current_fix.position_covariance[8] = (hdop/100 * self.alt_std_dev) ** 2  # FIXME
+            hdop = data['hdop']
+            current_fix.position_covariance[0] = (hdop * self.lon_std_dev) ** 2
+            current_fix.position_covariance[4] = (hdop * self.lat_std_dev) ** 2
+            current_fix.position_covariance[8] = (hdop * self.alt_std_dev) ** 2  # FIXME
 
-                self.fix_pub.publish(current_fix)
+            self.fix_pub.publish(current_fix)
 
             if not math.isnan(data['utc_time']):
                 current_time_ref.time_ref = rclpy.time.Time(seconds=data['utc_time']).to_msg()
@@ -278,92 +273,174 @@ class Ros2NMEADriver(Node):
             self.alt_std_dev = data['alt_std_dev']
 
         elif 'BESTPOSA' in parsed_sentence:
-            data = parsed_sentence['BESTPOSA']
-            if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
-                current_fix.status.status = NavSatStatus.STATUS_FIX
-                current_fix.status.service = NavSatStatus.SERVICE_GPS
-
-                current_fix.latitude = data['latitude']
-                current_fix.longitude = data['longitude']
-                current_fix.altitude = data['altitude']  # Altitude above ellipsoid
-
-                # Position covariance
-                lat_std_dev = data.get('lat_std_dev', float('NaN'))
-                lon_std_dev = data.get('lon_std_dev', float('NaN'))
-                alt_std_dev = data.get('alt_std_dev', float('NaN'))
+            try:
                 
-                if not math.isnan(lat_std_dev) and not math.isnan(lon_std_dev) and not math.isnan(alt_std_dev):
-                    current_fix.position_covariance[0] = lat_std_dev ** 2
-                    current_fix.position_covariance[4] = lon_std_dev ** 2
-                    current_fix.position_covariance[8] = alt_std_dev ** 2
-                    current_fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_DIAGONAL_KNOWN
-                else:
-                    current_fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_UNKNOWN
+                current_fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_APPROXIMATED
 
-                # Publish the fix message
-                self.fix_pub.publish(current_fix)
+                data = parsed_sentence['BESTPOSA']
+                self.get_logger().info(f"Pos data: {data}")
+
+                if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
+
+                    fix_type = data['position_type']
+
+                    position_type_mapping = {
+                        # RTK Fixed
+                        'NARROW_INT': NavSatStatus.STATUS_GBAS_FIX,
+                        'WIDE_INT': NavSatStatus.STATUS_GBAS_FIX,
+                        'INS_RTKFIXED': NavSatStatus.STATUS_GBAS_FIX,
+
+                        # RTK Float
+                        'NARROW_FLOAT': NavSatStatus.STATUS_FIX,
+                        'L1_FLOAT': NavSatStatus.STATUS_FIX,
+                        'IONOFREE_FLOAT': NavSatStatus.STATUS_FIX,
+                        'INS_RTKFLOAT': NavSatStatus.STATUS_FIX,
+
+                        # Single point / Differential GNSS
+                        'SINGLE': NavSatStatus.STATUS_FIX,
+                        'DIFF': NavSatStatus.STATUS_FIX,
+                        'PSRDIFF': NavSatStatus.STATUS_FIX,
+                        'WAAS': NavSatStatus.STATUS_FIX,
+                        'INS_PSRDIFF': NavSatStatus.STATUS_FIX,
+                        'INS_SBAS': NavSatStatus.STATUS_FIX,
+                        'INS_PSRSP': NavSatStatus.STATUS_FIX,
+
+                        # PPP (Precise Point Positioning)
+                        'PPP_CONVERGING': NavSatStatus.STATUS_FIX,
+                        'PPP': NavSatStatus.STATUS_FIX,
+                        'PPP_BASIC_CONVERGING': NavSatStatus.STATUS_FIX,
+                        'PPP_BASIC': NavSatStatus.STATUS_FIX,
+                        'INS_PPP_Converging': NavSatStatus.STATUS_FIX,
+                        'INS_PPP': NavSatStatus.STATUS_FIX,
+                        'INS_PPPP_BASIC_Converging': NavSatStatus.STATUS_FIX,
+                        'INS_PPPP_BASIC': NavSatStatus.STATUS_FIX,
+
+                        # Special States
+                        'DOPPLER_VELOCITY': NavSatStatus.STATUS_FIX,  # Could be mapped to STATUS_FIX for simplicity
+                        'FLOATCONV': NavSatStatus.STATUS_FIX,         # Floating carrier phase ambiguity
+
+                        # No fix
+                        'NONE': NavSatStatus.STATUS_NO_FIX,           # No solution
+                        'FIXEDPOS': NavSatStatus.STATUS_NO_FIX,       # Fixed by a command, not a dynamic fix
+                        'FIXEDHEIGHT': NavSatStatus.STATUS_NO_FIX,    # Fixed height by a command
+                        'PROPAGATED': NavSatStatus.STATUS_NO_FIX,     # Propagated without new observations
+                        'INS_PSRSP': NavSatStatus.STATUS_NO_FIX,      # INS with pseudorange single point
+
+                        # Reserved states or out-of-bound solutions are treated as NO_FIX
+                        'RESERVED': NavSatStatus.STATUS_NO_FIX,
+                        'OUT_OF_BOUNDS': NavSatStatus.STATUS_NO_FIX,
+                        'WARNING': NavSatStatus.STATUS_NO_FIX,
+                    }
+
+                    # Default to STATUS_NO_FIX if the type is unknown
+                    try:
+                        current_fix.status.status = position_type_mapping[fix_type]
+                        current_fix.status.service = NavSatStatus.SERVICE_GPS
+                    except Exception as e:
+                        self.get_logger().error(f"Convert fix type failed: {e}")
+                    
+                    # self.get_logger().info(f"Position types: {position_type_mapping}")
+                    # self.get_logger().info(f"BESTPOSA Position Type: {fix_type} = {current_fix.status.status}")
+
+                    # Set latitude, longitude, and altitude
+                    current_fix.latitude = data['latitude']
+                    current_fix.longitude = data['longitude']
+                    current_fix.altitude = data['altitude']  # Altitude above ellipsoid
+
+                    # Handle position covariance
+                    lat_std_dev = data.get('lat_std_dev', float('NaN'))
+                    lon_std_dev = data.get('lon_std_dev', float('NaN'))
+                    alt_std_dev = data.get('alt_std_dev', float('NaN'))
+
+                    if not math.isnan(lat_std_dev) and not math.isnan(lon_std_dev) and not math.isnan(alt_std_dev):
+                        current_fix.position_covariance[0] = lat_std_dev ** 2
+                        current_fix.position_covariance[4] = lon_std_dev ** 2
+                        current_fix.position_covariance[8] = alt_std_dev ** 2
+                        current_fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_DIAGONAL_KNOWN
+                    else:
+                        current_fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_UNKNOWN
+
+                    # Log position type and covariance details
+                    # self.get_logger().info(f"BESTPOSA Position Type: {fix_type}")
+                    # self.get_logger().info(f"Position Covariance: {current_fix.position_covariance}")
+
+                    # Publish the fix message
+                    self.fix_pub.publish(current_fix)
+            except Exception as e:
+                self.get_logger().error(f"BestPosA Message Error found: {e}")
 
         elif 'HEADINGA' in parsed_sentence:
             data = parsed_sentence['HEADINGA']
-            if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
-                current_heading = PointStamped()
-                current_heading.header.stamp = current_time
-                current_heading.header.frame_id = frame_id
+            self.get_logger().info(f"Heading data: {data}")
 
-                # Set heading and pitch
-                current_heading.point.z = data['heading']  # Heading in degrees
-                current_heading.point.y = data['pitch']  # Pitch in degrees (optional usage)
+            if data['heading']:  # Only process if solution is computed
+                if data['position_type'] == 'NARROW_INT':
 
-                # Publish the heading message
-                self.heading_pub.publish(current_heading)
-                # Log standard deviations for debugging or optional use
-                heading_std_dev = data.get('heading_std_dev', None)
-                pitch_std_dev = data.get('pitch_std_dev', None)
-                if heading_std_dev or pitch_std_dev:
-                    self.get_logger().debug(f"HEADINGA Std Dev: Heading={heading_std_dev}, Pitch={pitch_std_dev}")
+                    try:
+                        current_heading = PointStamped()
+                        current_heading.header.stamp = current_time
+                        current_heading.header.frame_id = frame_id
 
-                # Publish IMU message
-                imu_message = Imu()
-                imu_message.header.stamp = current_time
-                imu_message.header.frame_id = frame_id
+                        # Set heading and pitch
+                        current_heading.point.z = data['heading']  # Heading in degrees
+                        current_heading.point.y = data['pitch']  # Pitch in degrees (optional usage)
 
-                # Convert heading (yaw) and pitch to a quaternion
-                heading_radians = math.radians(data['heading'])
-                pitch_radians = math.radians(data['pitch'])
-                roll_radians = 0.0  # Assuming no roll data available
+                        # Publish the heading message
+                        self.heading_pub.publish(current_heading)
 
-                # Use tf transformations to convert to quaternion
-                q = quaternion_from_euler(roll_radians, pitch_radians, heading_radians)
-                imu_message.orientation.x = q[0]
-                imu_message.orientation.y = q[1]
-                imu_message.orientation.z = q[2]
-                imu_message.orientation.w = q[3]
+                        # Log standard deviations for debugging or optional use
+                        heading_std_dev = data.get('heading_std_dev', None)
+                        pitch_std_dev = data.get('pitch_std_dev', None)
+                        # if heading_std_dev or pitch_std_dev:
+                            # self.get_logger().info(f"HEADINGA Std Dev: Heading={heading_std_dev}, Pitch={pitch_std_dev}")
 
-                # Populate orientation covariance if available
-                if heading_std_dev and pitch_std_dev:
-                    imu_message.orientation_covariance = [
-                        pitch_std_dev ** 2, 0.0, 0.0,
-                        0.0, heading_std_dev ** 2, 0.0,
-                        0.0, 0.0, float('NaN')  # No roll covariance available
-                    ]
-                else:
-                    imu_message.orientation_covariance = [
-                        float('NaN'), 0.0, 0.0,
-                        0.0, float('NaN'), 0.0,
-                        0.0, 0.0, float('NaN')
-                    ]
-                # Publish the IMU message
-                self.imu_pub.publish(imu_message)
-                # self.get_logger().info(f"Published IMU: Orientation={q}, Covariance={imu_message.orientation_covariance}")
-        # elif 'HDT' in parsed_sentence:
-        #     data = parsed_sentence['HDT']
-        #     if data['heading']:
-        #         if self.status_type == 4:
-        #             current_heading = PointStamped()
-        #             current_heading.header.stamp = current_time
-        #             current_heading.header.frame_id = frame_id
-        #             current_heading.point.z = data['heading']
-        #             self.heading_pub.publish(current_heading)
+                        # Publish IMU message
+                        imu_message = Imu()
+                        imu_message.header.stamp = current_time
+                        imu_message.header.frame_id = frame_id
+
+                        # Convert heading (yaw) and pitch to a quaternion
+                        heading_radians = math.radians(data['heading'])
+                        pitch_radians = math.radians(data['pitch'])
+                        roll_radians = 0.0  # Assuming no roll data available
+
+                        # Use tf transformations to convert to quaternion
+                        q = quaternion_from_euler(roll_radians, pitch_radians, heading_radians)
+                        imu_message.orientation.x = q[0]
+                        imu_message.orientation.y = q[1]
+                        imu_message.orientation.z = q[2]
+                        imu_message.orientation.w = q[3]
+
+                        # Populate orientation covariance if available
+                        if heading_std_dev and pitch_std_dev:
+                            imu_message.orientation_covariance = [
+                                pitch_std_dev ** 2, 0.0, 0.0,
+                                0.0, heading_std_dev ** 2, 0.0,
+                                0.0, 0.0, float('NaN')  # No roll covariance available
+                            ]
+                        else:
+                            imu_message.orientation_covariance = [
+                                float('NaN'), 0.0, 0.0,
+                                0.0, float('NaN'), 0.0,
+                                0.0, 0.0, float('NaN')
+                            ]
+                        # Publish the IMU message
+                        self.imu_pub.publish(imu_message)
+                        # self.get_logger().info(f"Published IMU: Orientation={q}, Covariance={imu_message.orientation_covariance}")
+                    except Exception as e:
+                        self.get_logger().error(f"Heading Message Error found: {e}")
+
+
+                
+        elif 'HDT' in parsed_sentence:
+            data = parsed_sentence['HDT']
+            if data['heading']:
+                if self.status_type == 4:
+                    current_heading = PointStamped()
+                    current_heading.header.stamp = current_time
+                    current_heading.header.frame_id = frame_id
+                    current_heading.point.z = data['heading']
+                    self.heading_pub.publish(current_heading)
                 # # old
                 # current_heading = QuaternionStamped()
                 # current_heading.header.stamp = current_time

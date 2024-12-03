@@ -1,0 +1,36 @@
+{
+	"python.autoComplete.extraPaths": [
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/ublox_msgs/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/twist_stamper/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/robot_pose/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/ntrip_client/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/nmea_navsat_driver/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/esp32_dio_interface_python/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/battery_state/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/ublox_msgs/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/twist_stamper/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/robot_pose/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/ntrip_client/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/nmea_navsat_driver/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/esp32_dio_interface_python/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/battery_state/lib/python3.12/site-packages",
+		"/opt/ros/jazzy/lib/python3.12/site-packages"
+	],
+	"python.analysis.extraPaths": [
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/ublox_msgs/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/twist_stamper/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/robot_pose/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/ntrip_client/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/nmea_navsat_driver/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/esp32_dio_interface_python/lib/python3.12/site-packages",
+		"/media/craigms/Data/ros2_workspaces/mercury_ws/install/battery_state/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/ublox_msgs/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/twist_stamper/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/robot_pose/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/ntrip_client/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/nmea_navsat_driver/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/esp32_dio_interface_python/lib/python3.12/site-packages",
+		"/home/craigms/ROS2/mercury_ws/install/battery_state/lib/python3.12/site-packages",
+		"/opt/ros/jazzy/lib/python3.12/site-packages"
+	]
+}

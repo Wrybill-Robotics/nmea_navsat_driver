@@ -198,7 +198,7 @@ def parse_nmea_sentence(nmea_sentence):
         logger.debug("Regex didn't match, sentence not valid NMEA? Sentence was: %s"
                      % repr(nmea_sentence))
         return False
-    logger.info(f"Sentence: {nmea_sentence}")
+    
     fields = [field.strip(',') for field in nmea_sentence.split(',')]
 
     # Ignore the $ and talker ID portions (e.g. GP)
@@ -215,6 +215,7 @@ def parse_nmea_sentence(nmea_sentence):
     for entry in parse_map:
         parsed_sentence[entry[0]] = entry[1](fields[entry[2]])
 
+    logger.info(f"Sentence: {parsed_sentence}")
     return {sentence_type: parsed_sentence}
 
 def parse_bynav_sentence(bynav_sentence):
