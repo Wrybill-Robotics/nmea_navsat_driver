@@ -43,7 +43,7 @@ from libnmea_navsat_driver.checksum_utils import check_nmea_checksum, check_byna
 from libnmea_navsat_driver import parser
 from rtcm_msgs.msg import Message
 from threading import Thread
-import socket
+# import socket
 
 NMEA_NO_FIX = 0           # Fix not valid
 NMEA_GPS_FIX = 1          # GPS fix
@@ -68,13 +68,13 @@ class Ros2NMEADriver(Node):
         self.valid_fix = False
 
         # Parameter for RTCM serial port and socket settings
-        self.socket_host = self.declare_parameter('socket_host', 'localhost').value  # RTCM stream host
-        self.socket_port = self.declare_parameter('socket_port', 2789).value  # RTCM stream port
+        # self.socket_host = self.declare_parameter('socket_host', 'localhost').value  # RTCM stream host
+        # self.socket_port = self.declare_parameter('socket_port', 2789).value  # RTCM stream port
 
         # Start the socket reader in a separate thread
-        self.socket_thread = Thread(target=self.read_rtcm_socket)
-        self.socket_thread.daemon = True
-        self.socket_thread.start()
+        # self.socket_thread = Thread(target=self.read_rtcm_socket)
+        # self.socket_thread.daemon = True
+        # self.socket_thread.start()
 
         # Subscribe to RTCM topic
         # self.rtcm_sub = self.create_subscription(Message, 'rtcm', self.rtcm_callback, 10)
@@ -146,45 +146,45 @@ class Ros2NMEADriver(Node):
     #     # self.get_logger().info('I heard: "%s"' % msg.data)
     #     self.get_logger().info(f"Written RTCM data to serial port {msg.message}.")
 
-    def read_rtcm_socket(self):
-        # Set up a TCP/UDP socket to read RTCM data
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((self.socket_host, self.socket_port))
-                self.get_logger().info(f"Connected to RTCM stream at {self.socket_host}:{self.socket_port}")
+    # def read_rtcm_socket(self):
+    #     # Set up a TCP/UDP socket to read RTCM data
+    #     try:
+    #         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    #             s.connect((self.socket_host, self.socket_port))
+    #             self.get_logger().info(f"Connected to RTCM stream at {self.socket_host}:{self.socket_port}")
 
-                while rclpy.ok():
-                    data = s.recv(1024)  # Adjust buffer size as needed
-                    if data:
-                        self.handle_rtcm_data(data)
-        except Exception as e:
-            self.get_logger().error(f"Error reading from RTCM socket: {e}")
+    #             while rclpy.ok():
+    #                 data = s.recv(1024)  # Adjust buffer size as needed
+    #                 if data:
+    #                     self.handle_rtcm_data(data)
+    #     except Exception as e:
+    #         self.get_logger().error(f"Error reading from RTCM socket: {e}")
     
-    def handle_rtcm_data(self, data):
-        # Convert the raw data into an RTCM message
-        try:
-            rtcm_msg = Message()
-            rtcm_msg.message = data  # Assuming 'data' is in the correct format (binary)
+    # def handle_rtcm_data(self, data):
+    #     # Convert the raw data into an RTCM message
+    #     try:
+    #         rtcm_msg = Message()
+    #         rtcm_msg.message = data  # Assuming 'data' is in the correct format (binary)
             
-            # Write the RTCM message data to the GPS serial port
-            # self.GPS.write(rtcm_msg.message)
-            self.get_logger().info("Written RTCM data to serial port.")
-        except Exception as e:
-            self.get_logger().error(f"Error handling RTCM data: {e}\n {data}")
+    #         # Write the RTCM message data to the GPS serial port
+    #         # self.GPS.write(rtcm_msg.message)
+    #         self.get_logger().info("Written RTCM data to serial port.")
+    #     except Exception as e:
+    #         self.get_logger().error(f"Error handling RTCM data: {e}\n {data}")
 
-    def rtcm_callback(self, msg):
-        # self.get_logger().info(f"Written RTCM data to serial port {msg}.")
-        try:
-            # Ensure the message contains RTCM data and write to serial
-            if isinstance(msg, Message):
-                # Convert RTCM message to byte string
-                rtcm_data = msg.message
-                # self.GPS.write(rtcm_data)
-                self.get_logger().info("Written RTCM data to serial port.")
-            else:
-                self.get_logger().info("Ding ding")
-        except Exception as e:
-            self.get_logger().error(f"Failed to write RTCM data to serial: {e}")
+    # def rtcm_callback(self, msg):
+    #     # self.get_logger().info(f"Written RTCM data to serial port {msg}.")
+    #     try:
+    #         # Ensure the message contains RTCM data and write to serial
+    #         if isinstance(msg, Message):
+    #             # Convert RTCM message to byte string
+    #             rtcm_data = msg.message
+    #             # self.GPS.write(rtcm_data)
+    #             self.get_logger().info("Written RTCM data to serial port.")
+    #         else:
+    #             self.get_logger().info("Ding ding")
+    #     except Exception as e:
+    #         self.get_logger().error(f"Failed to write RTCM data to serial: {e}")
 
     
     # Returns True if we successfully did something with the passed in
