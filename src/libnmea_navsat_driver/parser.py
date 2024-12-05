@@ -149,7 +149,7 @@ parse_maps = {
         ("heading", safe_float, 1),
         # ("heading", convert_heading_to_enu, 1)
     ],
-    "BESTPOSA": [
+    "BESTNAVA": [
         ("solution_status", str, 1),  # Solution status (e.g., SOL_COMPUTED)
         ("position_type", str, 2),  # Position type (e.g., NARROW_INT)
         ("latitude", safe_float, 3),  # Latitude in degrees
@@ -162,7 +162,7 @@ parse_maps = {
         ("alt_std_dev", safe_float, 9),  # Altitude standard deviation
         ("covariance", safe_float, 10),  # Position covariance
     ],
-    "HEADINGA": [
+    "UNIHEADINGA": [
         ("solution_status", str, 1),  # Solution status (see Table 4-2)
         ("position_type", str, 2),  # Heading status (see Table 4-3)
         ("baseline_length", safe_float, 3),  # Heading baseline length (m)

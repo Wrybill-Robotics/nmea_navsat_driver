@@ -280,12 +280,12 @@ class Ros2NMEADriver(Node):
             self.lat_std_dev = data['lat_std_dev']
             self.alt_std_dev = data['alt_std_dev']
 
-        elif 'BESTPOSA' in parsed_sentence:
+        elif 'BESTNAVA' in parsed_sentence:
             try:
                 
                 current_fix.position_covariance_type = NavSatFix.COVARIANCE_TYPE_APPROXIMATED
 
-                data = parsed_sentence['BESTPOSA']
+                data = parsed_sentence['BESTNAVA']
                 # self.get_logger().info(f"Pos data: {data}")
 
                 if data['solution_status'] == 'SOL_COMPUTED':  # Only process if solution is computed
@@ -377,9 +377,9 @@ class Ros2NMEADriver(Node):
             except Exception as e:
                 self.get_logger().error(f"BestPosA Message Error found: {e}")
 
-        elif 'HEADINGA' in parsed_sentence:
-            data = parsed_sentence['HEADINGA']
-            self.get_logger().info(f"Heading data: {data}")
+        elif 'UNIHEADINGA' in parsed_sentence:
+            data = parsed_sentence['UNIHEADINGA']
+            # self.get_logger().info(f"Heading data: {data}")
 
             if data['heading']:  # Only process if solution is computed
                 # if data['position_type'] == 'NARROW_INT':
