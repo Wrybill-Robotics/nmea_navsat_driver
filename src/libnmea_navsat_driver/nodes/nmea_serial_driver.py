@@ -34,8 +34,6 @@ class SerialDriverWithSocket:
             while rclpy.ok():
                 data = self.GPS.readline().strip()
 
-                self.driver.get_logger().info(f"Got RTCM")
-                
                 if data:
                     # rclpy.spin_once(self.driver)  # Process ROS2 callbacks
                     try:
@@ -70,7 +68,7 @@ class SerialDriverWithSocket:
                     
                     # Write the raw RTCM data directly to the GPS serial port
                     self.GPS.write(rtcm_data)
-                    self.driver.get_logger().info("Written RTCM data to GPS.")
+                    # self.driver.get_logger().info("Written RTCM data to GPS.")
         except Exception as e:
             self.driver.get_logger().error(f"Error while reading from socket: {e}")
             self.socket.close()
