@@ -41,6 +41,7 @@ from sensor_msgs.msg import Imu
 from tf_transformations import quaternion_from_euler 
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum, check_bynav_checksum
 from libnmea_navsat_driver import parser
+from rtcm_msgs.msg import Message
 
 NMEA_NO_FIX = 0           # Fix not valid
 NMEA_GPS_FIX = 1          # GPS fix
@@ -49,7 +50,6 @@ NMEA_NOT_APPLICABLE = 3   # Not applicable
 NMEA_RTK_FIXED = 4        # RTK Fixed, xFill
 NMEA_RTK_FLOAT = 5        # RTK Float, OmniSTAR XP/HP, Location RTK, RTX
 NMEA_INS_DR = 6           # INS Dead reckoning
-
 
 class Ros2NMEADriver(Node):
     def __init__(self):
@@ -65,6 +65,10 @@ class Ros2NMEADriver(Node):
         self.use_RMC = self.declare_parameter('useRMC', False).value
         self.valid_fix = False
 
+        # Subscribe to RTCM topic
+        self.rtcm_sub = self.create_subscription(Message, 'rtcm', self.rtcm_callback, 10)
+        self.rtcm_sub
+        
         # epe = estimated position error
         self.default_epe_quality0 = self.declare_parameter('epe_quality0', 1000000).value
         self.default_epe_quality1 = self.declare_parameter('epe_quality1', 4.0).value
@@ -127,6 +131,25 @@ class Ros2NMEADriver(Node):
             ]
         }
 
+    # def rtcm_callback(self, msg):
+    #     # self.get_logger().info('I heard: "%s"' % msg.data)
+    #     self.get_logger().info(f"Written RTCM data to serial port {msg.message}.")
+
+    def rtcm_callback(self, msg):
+        # self.get_logger().info(f"Written RTCM data to serial port {msg}.")
+        try:
+            # Ensure the message contains RTCM data and write to serial
+            if isinstance(msg, Message):
+                # Convert RTCM message to byte string
+                rtcm_data = msg.message
+                # self.GPS.write(rtcm_data)
+                self.get_logger().info("Written RTCM data to serial port.")
+            else:
+                self.get_logger().info("Ding ding")
+        except Exception as e:
+            self.get_logger().error(f"Failed to write RTCM data to serial: {e}")
+
+    
     # Returns True if we successfully did something with the passed in
     # nmea_string
     def add_sentence(self, nmea_string, frame_id, timestamp=None):
