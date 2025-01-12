@@ -457,6 +457,7 @@ class Ros2NMEADriver(Node):
                             'NARROW_INT':               NMEA_RTK_FIXED,
                             'WIDE_INT':                 NMEA_RTK_FIXED,
                             'INS_RTKFIXED':             NMEA_RTK_FIXED,
+                            'L1_INT':                   NMEA_RTK_FIXED,
 
                             # RTK Float
                             'NARROW_FLOAT':             NMEA_RTK_FLOAT,
