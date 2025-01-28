@@ -140,7 +140,7 @@ def main(args=None):
     serial_driver_with_socket = SerialDriverWithSocket(driver)
 
     signal.signal(signal.SIGINT, serial_driver_with_socket.signal_handler)
-
+    signal.signal(signal.SIGTERM, serial_driver_with_socket.signal_handler)
 
     try:
         serial_driver_with_socket.init_serial()
