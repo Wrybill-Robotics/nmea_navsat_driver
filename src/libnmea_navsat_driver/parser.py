@@ -150,17 +150,17 @@ parse_maps = {
         # ("heading", convert_heading_to_enu, 1)
     ],
     "BESTNAVA": [
-        ("solution_status", str, 1),  # Solution status (e.g., SOL_COMPUTED)
-        ("position_type", str, 2),  # Position type (e.g., NARROW_INT)
-        ("latitude", safe_float, 3),  # Latitude in degrees
-        ("longitude", safe_float, 4),  # Longitude in degrees
-        ("altitude", safe_float, 5),  # Altitude above the ellipsoid
+        ("solution_status", str, 1),    # Solution status (e.g., SOL_COMPUTED)
+        ("position_type", str, 2),      # Position type (e.g., NARROW_INT)
+        ("latitude", safe_float, 3),    # Latitude in degrees
+        ("longitude", safe_float, 4),   # Longitude in degrees
+        ("altitude", safe_float, 5),    # Altitude above the ellipsoid
         ("undulation", safe_float, 6),  # Geoid separation
-        ("datum", str, 6),  # Datum (e.g., WGS84)
-        ("lat_std_dev", safe_float, 7),  # Latitude standard deviation
-        ("lon_std_dev", safe_float, 8),  # Longitude standard deviation
-        ("alt_std_dev", safe_float, 9),  # Altitude standard deviation
-        ("covariance", safe_float, 10),  # Position covariance
+        ("datum", str, 6),              # Datum (e.g., WGS84)
+        ("lat_std_dev", safe_float, 7), # Latitude standard deviation
+        ("lon_std_dev", safe_float, 8), # Longitude standard deviation
+        ("alt_std_dev", safe_float, 9), # Altitude standard deviation
+        ("covariance", safe_float, 10), # Position covariance
     ],
     "UNIHEADINGA": [
         ("solution_status", str, 1),  # Solution status (see Table 4-2)

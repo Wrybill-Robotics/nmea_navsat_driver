@@ -13,7 +13,7 @@ class SerialDriverWithSocket:
         self.driver = driver
         self.frame_id = driver.get_frame_id()
         self.serial_port = driver.declare_parameter('port', '/dev/ttyUSB0').value
-        self.serial_baud = driver.declare_parameter('baud', 4800).value
+        self.serial_baud = driver.declare_parameter('baud', 115200).value
         self.socket_host = driver.declare_parameter('socket_host', 'localhost').value
         self.socket_port = driver.declare_parameter('socket_port', 2789).value
         
@@ -28,7 +28,28 @@ class SerialDriverWithSocket:
         self.gps_connected = False
 
         self.shutdown_flag = False  # Flag to signal shutdown
+        # From m2
+        #BESTPOSA,   COM3,0,92.5,FINESTEERING,2343,94540.400,00000000,0000,781;SOL_COMPUTED,NARROW_INT,-40.37993097965,175.61293101574,28.5369,15.0493,WGS84,0.0156,0.0163,0.0301,"1195",0.400,0.017,31,22,22,22,00,00,30,37*1d21563a
 
+        # M1 Outside
+        #BESTNAVA,      88,GPS,FINE,2380,440535600,0,0,18,9;SOL_COMPUTED,PSRDIFF,-40.38011892865,175.61256910407,28.3449,14.6861,WGS84,0.4778,0.4548,1.1723,"1195",61.600,58.000,42,27,27,0,1,18,11,51,SOL_COMPUTED,DOPPLER_VELOCITY,0.000,0.000,0.0015,0.941811,-0.0045,0.0160,0.0110*bc89ad07
+        #UNIHEADINGA,   88,GPS,FINE,2380,440535600,0,0,18,14;SOL_COMPUTED,L1_INT,0.8176,210.8297,0.3650,0.0000,0.4080,0.8552,"999",42,30,30,0,3,01,1,51*69ac1b05
+        #BESTNAVA,      88,GPS,FINE,2380,440535800,0,0,18,10;SOL_COMPUTED,PSRDIFF,-40.38011891726,175.61256911644,28.3447,14.6861,WGS84,0.4783,0.4551,1.1738,"1195",61.800,58.000,42,27,27,0,1,18,11,51,SOL_COMPUTED,DOPPLER_VELOCITY,0.000,0.000,0.0019,350.223961,-0.0044,0.0160,0.0109*6d3d8b32
+        #UNIHEADINGA,   88,GPS,FINE,2380,440535800,0,0,18,14;SOL_COMPUTED,L1_INT,0.8211,211.0314,0.7240,0.0000,0.4060,0.8522,"999",42,30,30,0,3,01,1,51*35134843
+        #BESTNAVA,      88,GPS,FINE,2380,440536000,0,0,18,11;SOL_COMPUTED,PSRDIFF,-40.38011890692,175.61256912540,28.3443,14.6861,WGS84,0.4782,0.4555,1.1737,"1195",62.000,58.000,42,27,27,0,1,18,11,51,SOL_COMPUTED,DOPPLER_VELOCITY,0.000,0.000,0.0019,344.258914,-0.0043,0.0160,0.0109*d4ff2939
+        #UNIHEADINGA,   88,GPS,FINE,2380,440536000,0,0,18,16;SOL_COMPUTED,L1_INT,0.8224,210.8856,0.5414,0.0000,0.4055,0.8504,"999",42,30,30,0,3,01,1,51*8bf17726
+        #BESTNAVA,      88,GPS,FINE,2380,440536200,0,0,18,10;SOL_COMPUTED,PSRDIFF,-40.38011888799,175.61256912895,28.3439,14.6861,WGS84,0.4789,0.4560,1.1757,"1195",62.200,58.000,42,27,27,0,1,18,11,51,SOL_COMPUTED,DOPPLER_VELOCITY,0.000,0.000,0.0021,331.251882,-0.0045,0.0160,0.0109*2414d69d
+
+        # M1 Inside
+        #BESTNAVA,   95,GPS,FINE,2380,442844200,0,0,18,3;INSUFFICIENT_OBS,NONE,-40.37981427103,175.61286287752,-32.8624,14.6875,WGS84,204.9449,180.4498,221.7988,"0",0.000,1798.000,2,2,0,0,161,02,00,00,INSUFFICIENT_OBS,NONE,0.000,0.000,0.0000,0.000000,0.0000,14.7774,11.0171*5a8112b0
+        #UNIHEADINGA,95,GPS,FINE,2380,442844200,0,0,18,5;INSUFFICIENT_OBS,NONE,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,"",0,0,0,0,0,00,0,0*69dc1b69
+        #BESTNAVA,   95,GPS,FINE,2380,442844400,0,0,18,3;INSUFFICIENT_OBS,NONE,-40.37981427103,175.61286287752,-32.8624,14.6875,WGS84,204.9449,180.4498,221.7988,"0",0.000,1798.200,2,2,0,0,161,02,00,00,INSUFFICIENT_OBS,NONE,0.000,0.000,0.0000,0.000000,0.0000,14.7774,11.0171*77734a67
+        #UNIHEADINGA,95,GPS,FINE,2380,442844400,0,0,18,5;INSUFFICIENT_OBS,NONE,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,"",0,0,0,0,0,00,0,0*c6583d26
+        #BESTNAVA,   95,GPS,FINE,2380,442844600,0,0,18,3;INSUFFICIENT_OBS,NONE,-40.37981427103,175.61286287752,-32.8624,14.6875,WGS84,204.9449,180.4498,221.7988,"0",0.000,1798.400,2,2,0,0,161,02,00,00,INSUFFICIENT_OBS,NONE,0.000,0.000,0.0000,0.000000,0.0000,14.7774,11.0171*d3c89c13
+        #UNIHEADINGA,95,GPS,FINE,2380,442844600,0,0,18,5;INSUFFICIENT_OBS,NONE,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,"",0,0,0,0,0,00,0,0*a32420e3
+        #BESTNAVA,   95,GPS,FINE,2380,442844800,0,0,18,3;INSUFFICIENT_OBS,NONE,-40.37981427103,175.61286287752,-32.8624,14.6875,WGS84,204.9449,180.4498,221.7988,"0",0.000,1798.600,2,2,0,0,161,02,00,00,INSUFFICIENT_OBS,NONE,0.000,0.000,0.0000,0.000000,0.0000,14.7774,11.0171*2c97fbc9
+        #UNIHEADINGA,95,GPS,FINE,2380,442844800,0,0,18,5;INSUFFICIENT_OBS,NONE,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,"",0,0,0,0,0,00,0,0*422177f9
+        #BESTNAVA,   95,GPS,FINE,2380,442845000,0,0,18,3;INSUFFICIENT_OBS,NONE,-40.37981427103,175.61286287752,-32.8624,14.6875,WGS84,204.9449,180.4498,221.7988,"0",0.000,1798.800,2
 
     def init_serial(self):
         # Open the GPS serial port for reading and writing
@@ -78,6 +99,7 @@ class SerialDriverWithSocket:
                     self.socket.connect((self.socket_host, self.socket_port))  # Example IP and port
                     self.driver.get_logger().info(f"Socket connected to {self.socket_host}:{self.socket_port}")
                     self.socket_connected = True
+
                 except Exception as e:
                     self.driver.get_logger().error(f"Socket connection failed: {e}")
                     self.socket_connected = False
@@ -91,8 +113,7 @@ class SerialDriverWithSocket:
                     if ready_to_read:
                         rtcm_data = self.socket.recv(2048)  # Adjust the buffer size if needed
                         if rtcm_data:
-                            # self.get_logger().info(f"Received RTCM from socket: {len(rtcm_data)}")
-                            # self.rtcm_queue.put(rtcm_data)  # Put the message in the queue
+                            # self.driver.get_logger().info(f"Received RTCM from socket: {len(rtcm_data)}")
                             if self.gps_connected:
                                 self.gps.write(rtcm_data)
                             else:
@@ -104,6 +125,7 @@ class SerialDriverWithSocket:
                             self.socket_connected = False  # Set it to False to trigger reconnection
                     else:
                         pass
+
                 except Exception as e:
                     self.driver.get_logger().error(f"Socket read error: {e}")
                     self.socket_connected = False  # Set it to False to trigger reconnection
@@ -140,7 +162,6 @@ def main(args=None):
     serial_driver_with_socket = SerialDriverWithSocket(driver)
 
     signal.signal(signal.SIGINT, serial_driver_with_socket.signal_handler)
-
 
     try:
         serial_driver_with_socket.init_serial()

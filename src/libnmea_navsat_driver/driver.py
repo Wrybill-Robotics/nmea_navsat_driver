@@ -31,18 +31,16 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import math
-
 import rclpy
-
-from rclpy.node import Node
-from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
-from geometry_msgs.msg import TwistStamped, QuaternionStamped, PointStamped
-from sensor_msgs.msg import Imu
-from tf_transformations import quaternion_from_euler 
+from rclpy.node                 import Node
+from sensor_msgs.msg            import NavSatFix, NavSatStatus, TimeReference
+from geometry_msgs.msg          import TwistStamped, QuaternionStamped, PointStamped
+from sensor_msgs.msg            import Imu
+from tf_transformations         import quaternion_from_euler 
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum, check_bynav_checksum
-from libnmea_navsat_driver import parser
-from rtcm_msgs.msg import Message
-from threading import Thread
+from libnmea_navsat_driver      import parser
+from rtcm_msgs.msg              import Message
+from threading                  import Thread
 # import socket
 
 NMEA_NO_FIX = 0           # Fix not valid
@@ -53,19 +51,68 @@ NMEA_RTK_FIXED = 4        # RTK Fixed, xFill
 NMEA_RTK_FLOAT = 5        # RTK Float, OmniSTAR XP/HP, Location RTK, RTX
 NMEA_INS_DR = 6           # INS Dead reckoning
 
+position_type_mapping = {
+                        # RTK Fixed
+                        'NARROW_INT':               NMEA_RTK_FIXED,
+                        'WIDE_INT':                 NMEA_RTK_FIXED,
+                        'INS_RTKFIXED':             NMEA_RTK_FIXED,
+                        'L1_INT':                   NMEA_RTK_FIXED,
+
+                        # RTK Float
+                        'NARROW_FLOAT':             NMEA_RTK_FLOAT,
+                        'L1_FLOAT':                 NMEA_RTK_FLOAT,
+                        'IONOFREE_FLOAT':           NMEA_RTK_FLOAT,
+                        'INS_RTKFLOAT':             NMEA_RTK_FLOAT,
+
+                        # Single point / Differential GNSS
+                        'SINGLE':                   NMEA_GPS_FIX,
+                        'DIFF':                     NMEA_GPS_FIX,
+                        'PSRDIFF':                  NMEA_GPS_FIX,
+                        'WAAS':                     NMEA_GPS_FIX,
+                        'INS_PSRDIFF':              NMEA_GPS_FIX,
+                        'INS_SBAS':                 NMEA_GPS_FIX,
+                        'INS_PSRSP':                NMEA_GPS_FIX,
+
+                        # PPP (Precise Point Positioning)
+                        'PPP_CONVERGING':           NMEA_GPS_FIX,
+                        'PPP':                      NMEA_GPS_FIX,
+                        'PPP_BASIC_CONVERGING':     NMEA_GPS_FIX,
+                        'PPP_BASIC':                NMEA_GPS_FIX,
+                        'INS_PPP_Converging':       NMEA_GPS_FIX,
+                        'INS_PPP':                  NMEA_GPS_FIX,
+                        'INS_PPPP_BASIC_Converging':NMEA_GPS_FIX,
+                        'INS_PPPP_BASIC':           NMEA_GPS_FIX,
+
+                        # Special States
+                        'DOPPLER_VELOCITY':         NMEA_NO_FIX,  # Could be mapped to STATUS_FIX for simplicity
+                        'FLOATCONV':                NMEA_NO_FIX,  # Floating carrier phase ambiguity
+
+                        # No fix
+                        'NONE':                     NMEA_NO_FIX,  # No solution
+                        'FIXEDPOS':                 NMEA_NO_FIX,  # Fixed by a command, not a dynamic fix
+                        'FIXEDHEIGHT':              NMEA_NO_FIX,  # Fixed height by a command
+                        'PROPAGATED':               NMEA_NO_FIX,  # Propagated without new observations
+                        'INS_PSRSP':                NMEA_NO_FIX,  # INS with pseudorange single point
+                        
+                        # Reserved states or out-of-bound solutions are treated as NO_FIX
+                        'RESERVED':                 NMEA_NO_FIX,
+                        'OUT_OF_BOUNDS':            NMEA_NO_FIX,
+                        'WARNING':                  NMEA_NO_FIX,
+                    }
+
 class Ros2NMEADriver(Node):
     def __init__(self):
         super().__init__('nmea_navsat_driver')
 
-        self.fix_pub = self.create_publisher(NavSatFix, 'fix', 10)
-        self.vel_pub = self.create_publisher(TwistStamped, 'vel', 10)
-        self.heading_pub = self.create_publisher(PointStamped, 'heading', 10)
-        self.imu_pub = self.create_publisher(Imu, 'heading_imu', 10)
-        self.time_ref_pub = self.create_publisher(TimeReference, 'time_reference', 10)
+        self.fix_pub         = self.create_publisher(NavSatFix, 'fix', 10)
+        self.vel_pub         = self.create_publisher(TwistStamped, 'vel', 10)
+        self.heading_pub     = self.create_publisher(PointStamped, 'heading', 10)
+        self.imu_pub         = self.create_publisher(Imu, 'heading_imu', 10)
+        self.time_ref_pub    = self.create_publisher(TimeReference, 'time_reference', 10)
 
         self.time_ref_source = self.declare_parameter('time_ref_source', 'gps').value
-        self.use_RMC = self.declare_parameter('useRMC', False).value
-        self.valid_fix = False
+        self.use_RMC         = self.declare_parameter('useRMC', False).value
+        self.valid_fix       = False
 
         # Parameter for RTCM serial port and socket settings
         # self.socket_host = self.declare_parameter('socket_host', 'localhost').value  # RTCM stream host
@@ -352,54 +399,54 @@ class Ros2NMEADriver(Node):
 
                     fix_type = data['position_type']
 
-                    position_type_mapping = {
-                        # RTK Fixed
-                        'NARROW_INT':               NMEA_RTK_FIXED,
-                        'WIDE_INT':                 NMEA_RTK_FIXED,
-                        'INS_RTKFIXED':             NMEA_RTK_FIXED,
-                        'L1_INT':                   NMEA_RTK_FIXED,
+                    # position_type_mapping = {
+                    #     # RTK Fixed
+                    #     'NARROW_INT':               NMEA_RTK_FIXED,
+                    #     'WIDE_INT':                 NMEA_RTK_FIXED,
+                    #     'INS_RTKFIXED':             NMEA_RTK_FIXED,
+                    #     'L1_INT':                   NMEA_RTK_FIXED,
 
-                        # RTK Float
-                        'NARROW_FLOAT':             NMEA_RTK_FLOAT,
-                        'L1_FLOAT':                 NMEA_RTK_FLOAT,
-                        'IONOFREE_FLOAT':           NMEA_RTK_FLOAT,
-                        'INS_RTKFLOAT':             NMEA_RTK_FLOAT,
+                    #     # RTK Float
+                    #     'NARROW_FLOAT':             NMEA_RTK_FLOAT,
+                    #     'L1_FLOAT':                 NMEA_RTK_FLOAT,
+                    #     'IONOFREE_FLOAT':           NMEA_RTK_FLOAT,
+                    #     'INS_RTKFLOAT':             NMEA_RTK_FLOAT,
 
-                        # Single point / Differential GNSS
-                        'SINGLE':                   NMEA_GPS_FIX,
-                        'DIFF':                     NMEA_GPS_FIX,
-                        'PSRDIFF':                  NMEA_GPS_FIX,
-                        'WAAS':                     NMEA_GPS_FIX,
-                        'INS_PSRDIFF':              NMEA_GPS_FIX,
-                        'INS_SBAS':                 NMEA_GPS_FIX,
-                        'INS_PSRSP':                NMEA_GPS_FIX,
+                    #     # Single point / Differential GNSS
+                    #     'SINGLE':                   NMEA_GPS_FIX,
+                    #     'DIFF':                     NMEA_GPS_FIX,
+                    #     'PSRDIFF':                  NMEA_GPS_FIX,
+                    #     'WAAS':                     NMEA_GPS_FIX,
+                    #     'INS_PSRDIFF':              NMEA_GPS_FIX,
+                    #     'INS_SBAS':                 NMEA_GPS_FIX,
+                    #     'INS_PSRSP':                NMEA_GPS_FIX,
 
-                        # PPP (Precise Point Positioning)
-                        'PPP_CONVERGING':           NMEA_GPS_FIX,
-                        'PPP':                      NMEA_GPS_FIX,
-                        'PPP_BASIC_CONVERGING':     NMEA_GPS_FIX,
-                        'PPP_BASIC':                NMEA_GPS_FIX,
-                        'INS_PPP_Converging':       NMEA_GPS_FIX,
-                        'INS_PPP':                  NMEA_GPS_FIX,
-                        'INS_PPPP_BASIC_Converging':NMEA_GPS_FIX,
-                        'INS_PPPP_BASIC':           NMEA_GPS_FIX,
+                    #     # PPP (Precise Point Positioning)
+                    #     'PPP_CONVERGING':           NMEA_GPS_FIX,
+                    #     'PPP':                      NMEA_GPS_FIX,
+                    #     'PPP_BASIC_CONVERGING':     NMEA_GPS_FIX,
+                    #     'PPP_BASIC':                NMEA_GPS_FIX,
+                    #     'INS_PPP_Converging':       NMEA_GPS_FIX,
+                    #     'INS_PPP':                  NMEA_GPS_FIX,
+                    #     'INS_PPPP_BASIC_Converging':NMEA_GPS_FIX,
+                    #     'INS_PPPP_BASIC':           NMEA_GPS_FIX,
 
-                        # Special States
-                        'DOPPLER_VELOCITY':         NMEA_NO_FIX,  # Could be mapped to STATUS_FIX for simplicity
-                        'FLOATCONV':                NMEA_NO_FIX,         # Floating carrier phase ambiguity
+                    #     # Special States
+                    #     'DOPPLER_VELOCITY':         NMEA_NO_FIX,  # Could be mapped to STATUS_FIX for simplicity
+                    #     'FLOATCONV':                NMEA_NO_FIX,         # Floating carrier phase ambiguity
 
-                        # No fix
-                        'NONE':                     NMEA_NO_FIX,           # No solution
-                        'FIXEDPOS':                 NMEA_NO_FIX,       # Fixed by a command, not a dynamic fix
-                        'FIXEDHEIGHT':              NMEA_NO_FIX,    # Fixed height by a command
-                        'PROPAGATED':               NMEA_NO_FIX,     # Propagated without new observations
-                        'INS_PSRSP':                NMEA_NO_FIX,      # INS with pseudorange single point
-
-                        # Reserved states or out-of-bound solutions are treated as NO_FIX
-                        'RESERVED':                 NMEA_NO_FIX,
-                        'OUT_OF_BOUNDS':            NMEA_NO_FIX,
-                        'WARNING':                  NMEA_NO_FIX,
-                    }
+                    #     # No fix
+                    #     'NONE':                     NMEA_NO_FIX,           # No solution
+                    #     'FIXEDPOS':                 NMEA_NO_FIX,       # Fixed by a command, not a dynamic fix
+                    #     'FIXEDHEIGHT':              NMEA_NO_FIX,    # Fixed height by a command
+                    #     'PROPAGATED':               NMEA_NO_FIX,     # Propagated without new observations
+                    #     'INS_PSRSP':                NMEA_NO_FIX,      # INS with pseudorange single point
+                        
+                    #     # Reserved states or out-of-bound solutions are treated as NO_FIX
+                    #     'RESERVED':                 NMEA_NO_FIX,
+                    #     'OUT_OF_BOUNDS':            NMEA_NO_FIX,
+                    #     'WARNING':                  NMEA_NO_FIX,
+                    # }
 
                     # Default to STATUS_NO_FIX if the type is unknown
                     try:
@@ -412,9 +459,9 @@ class Ros2NMEADriver(Node):
                     # self.get_logger().info(f"BESTPOSA Position Type: {fix_type} = {current_fix.status.status}")
 
                     # Set latitude, longitude, and altitude
-                    current_fix.latitude = data['latitude']
+                    current_fix.latitude  = data['latitude']
                     current_fix.longitude = data['longitude']
-                    current_fix.altitude = data['altitude']  # Altitude above ellipsoid
+                    current_fix.altitude  = data['altitude']  # Altitude above ellipsoid
 
                     # Handle position covariance
                     lat_std_dev = data.get('lat_std_dev', float('NaN'))
@@ -452,54 +499,54 @@ class Ros2NMEADriver(Node):
 
                         fix_type = data['position_type']
 
-                        position_type_mapping = {
-                            # RTK Fixed
-                            'NARROW_INT':               NMEA_RTK_FIXED,
-                            'WIDE_INT':                 NMEA_RTK_FIXED,
-                            'INS_RTKFIXED':             NMEA_RTK_FIXED,
-                            'L1_INT':                   NMEA_RTK_FIXED,
+                        # position_type_mapping = {
+                        #     # RTK Fixed
+                        #     'NARROW_INT':               NMEA_RTK_FIXED,
+                        #     'WIDE_INT':                 NMEA_RTK_FIXED,
+                        #     'INS_RTKFIXED':             NMEA_RTK_FIXED,
+                        #     'L1_INT':                   NMEA_RTK_FIXED,
 
-                            # RTK Float
-                            'NARROW_FLOAT':             NMEA_RTK_FLOAT,
-                            'L1_FLOAT':                 NMEA_RTK_FLOAT,
-                            'IONOFREE_FLOAT':           NMEA_RTK_FLOAT,
-                            'INS_RTKFLOAT':             NMEA_RTK_FLOAT,
+                        #     # RTK Float
+                        #     'NARROW_FLOAT':             NMEA_RTK_FLOAT,
+                        #     'L1_FLOAT':                 NMEA_RTK_FLOAT,
+                        #     'IONOFREE_FLOAT':           NMEA_RTK_FLOAT,
+                        #     'INS_RTKFLOAT':             NMEA_RTK_FLOAT,
 
-                            # Single point / Differential GNSS
-                            'SINGLE':                   NMEA_GPS_FIX,
-                            'DIFF':                     NMEA_GPS_FIX,
-                            'PSRDIFF':                  NMEA_GPS_FIX,
-                            'WAAS':                     NMEA_GPS_FIX,
-                            'INS_PSRDIFF':              NMEA_GPS_FIX,
-                            'INS_SBAS':                 NMEA_GPS_FIX,
-                            'INS_PSRSP':                NMEA_GPS_FIX,
+                        #     # Single point / Differential GNSS
+                        #     'SINGLE':                   NMEA_GPS_FIX,
+                        #     'DIFF':                     NMEA_GPS_FIX,
+                        #     'PSRDIFF':                  NMEA_GPS_FIX,
+                        #     'WAAS':                     NMEA_GPS_FIX,
+                        #     'INS_PSRDIFF':              NMEA_GPS_FIX,
+                        #     'INS_SBAS':                 NMEA_GPS_FIX,
+                        #     'INS_PSRSP':                NMEA_GPS_FIX,
 
-                            # PPP (Precise Point Positioning)
-                            'PPP_CONVERGING':           NMEA_GPS_FIX,
-                            'PPP':                      NMEA_GPS_FIX,
-                            'PPP_BASIC_CONVERGING':     NMEA_GPS_FIX,
-                            'PPP_BASIC':                NMEA_GPS_FIX,
-                            'INS_PPP_Converging':       NMEA_GPS_FIX,
-                            'INS_PPP':                  NMEA_GPS_FIX,
-                            'INS_PPPP_BASIC_Converging':NMEA_GPS_FIX,
-                            'INS_PPPP_BASIC':           NMEA_GPS_FIX,
+                        #     # PPP (Precise Point Positioning)
+                        #     'PPP_CONVERGING':           NMEA_GPS_FIX,
+                        #     'PPP':                      NMEA_GPS_FIX,
+                        #     'PPP_BASIC_CONVERGING':     NMEA_GPS_FIX,
+                        #     'PPP_BASIC':                NMEA_GPS_FIX,
+                        #     'INS_PPP_Converging':       NMEA_GPS_FIX,
+                        #     'INS_PPP':                  NMEA_GPS_FIX,
+                        #     'INS_PPPP_BASIC_Converging':NMEA_GPS_FIX,
+                        #     'INS_PPPP_BASIC':           NMEA_GPS_FIX,
 
-                            # Special States
-                            'DOPPLER_VELOCITY':         NMEA_NO_FIX,  # Could be mapped to STATUS_FIX for simplicity
-                            'FLOATCONV':                NMEA_NO_FIX,         # Floating carrier phase ambiguity
+                        #     # Special States
+                        #     'DOPPLER_VELOCITY':         NMEA_NO_FIX,  # Could be mapped to STATUS_FIX for simplicity
+                        #     'FLOATCONV':                NMEA_NO_FIX,         # Floating carrier phase ambiguity
 
-                            # No fix
-                            'NONE':                     NMEA_NO_FIX,           # No solution
-                            'FIXEDPOS':                 NMEA_NO_FIX,       # Fixed by a command, not a dynamic fix
-                            'FIXEDHEIGHT':              NMEA_NO_FIX,    # Fixed height by a command
-                            'PROPAGATED':               NMEA_NO_FIX,     # Propagated without new observations
-                            'INS_PSRSP':                NMEA_NO_FIX,      # INS with pseudorange single point
+                        #     # No fix
+                        #     'NONE':                     NMEA_NO_FIX,           # No solution
+                        #     'FIXEDPOS':                 NMEA_NO_FIX,       # Fixed by a command, not a dynamic fix
+                        #     'FIXEDHEIGHT':              NMEA_NO_FIX,    # Fixed height by a command
+                        #     'PROPAGATED':               NMEA_NO_FIX,     # Propagated without new observations
+                        #     'INS_PSRSP':                NMEA_NO_FIX,      # INS with pseudorange single point
 
-                            # Reserved states or out-of-bound solutions are treated as NO_FIX
-                            'RESERVED':                 NMEA_NO_FIX,
-                            'OUT_OF_BOUNDS':            NMEA_NO_FIX,
-                            'WARNING':                  NMEA_NO_FIX,
-                        }
+                        #     # Reserved states or out-of-bound solutions are treated as NO_FIX
+                        #     'RESERVED':                 NMEA_NO_FIX,
+                        #     'OUT_OF_BOUNDS':            NMEA_NO_FIX,
+                        #     'WARNING':                  NMEA_NO_FIX,
+                        # }
 
                         # Default to STATUS_NO_FIX if the type is unknown
                         try:
@@ -508,10 +555,10 @@ class Ros2NMEADriver(Node):
                             self.get_logger().error(f"Convert fix type failed: {e}")
 
                         # Set heading and pitch
-                        current_heading.point.z = data['heading']  # Heading in degrees
-                        current_heading.point.y = data['pitch']  # Pitch in degrees (optional usage)
                         current_heading.point.x = float(fix_status)  # Pitch in degrees (optional usage)
-
+                        current_heading.point.y = data['pitch']  # Pitch in degrees (optional usage)
+                        current_heading.point.z = data['heading']  # Heading in degrees
+                        
                         # Publish the heading message
                         self.heading_pub.publish(current_heading)
 
